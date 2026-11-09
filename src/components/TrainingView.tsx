@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { GUIDE } from '../data/guide';
-import { PLAN_DAYS, PROGRAM_WEEKS, RIR_TARGET, getExercise, type StrengthDay } from '../data/plan';
+import { Img, PHOTOS } from '../data/photos';
+import { PLAN_DAYS, PROGRAM_WEEKS, RIR_TARGET, type StrengthDay } from '../data/plan';
 import { useAdjustments, useInventory, useSessions, useSettings } from '../hooks/useData';
 import { today } from '../lib/dates';
 import { isRecoveryWeek, isStrengthDay, programDayFor, setsForWeek } from '../lib/program';
 import { DayPlanList } from './DayPlanList';
-import { ExerciseIllustration } from './ExerciseIllustration';
 import { IconPlay } from './icons';
 import { StartWorkoutButton } from './StartWorkout';
 import { Card, Loading, Notice, PageHeader } from './ui';
@@ -29,7 +28,6 @@ export function TrainingView() {
       <PageHeader title="Entrenamiento" subtitle={`Semana ${week} de ${PROGRAM_WEEKS} · ${setsForWeek(week)} series por ejercicio${isRecoveryWeek(week) ? ' · recuperación' : ''}`} />
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4" role="tablist" aria-label="Elegir día">
         {(['A', 'B', 'C', 'D'] as const).map((k) => {
-          const first = getExercise(PLAN_DAYS[k].slots[0].exerciseId)!;
           const on = selected === k;
           return (
             <button
@@ -40,8 +38,8 @@ export function TrainingView() {
               onClick={() => setSelected(k)}
               className={`flex flex-col gap-2 rounded-2xl border p-3 text-left transition ${on ? 'border-primary bg-primary-soft shadow-card' : 'border-line bg-surface hover:bg-surface-2'}`}
             >
-              <div className="aspect-[16/10] overflow-hidden rounded-xl bg-gradient-to-br from-[#f3edff] to-[#d8c8fb] dark:from-[#2a1d44] dark:to-[#3b2a63]">
-                <ExerciseIllustration pattern={GUIDE[first.id].pattern} label={first.nameEs} className="h-full w-full !bg-transparent" />
+              <div className="aspect-[16/10] overflow-hidden rounded-xl bg-primary-soft">
+                <Img photo={PHOTOS[k]} className="h-full w-full" decorative />
               </div>
               <span className="text-xs font-semibold text-primary">
                 {PLAN_DAYS[k].weekday}

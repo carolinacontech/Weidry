@@ -1,4 +1,4 @@
-/* Service worker de Mi Entrenamiento.
+/* Service worker de Weidry.
  * - Precachea todo el build (lista inyectada en el build) para uso offline.
  * - Navegación: red primero, con respaldo a la app en caché.
  * - Recursos estáticos: caché primero.

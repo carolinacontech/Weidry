@@ -1,4 +1,4 @@
-# Mi Entrenamiento
+# Weidry
 
 PWA en español para entrenar fuerza con un programa de 13 semanas centrado en **fuerza, desarrollo de glúteos y definición muscular**, adaptado a un equipamiento real: **tres pares de mancuernas fijas de 10, 15 y 20 lb**, peso corporal y alternativas domésticas ligeras (botellas de agua). Está pensada primero para iPhone. Funciona sin conexión, guarda los datos solo en el dispositivo (IndexedDB) y no pide cuenta.
 
@@ -26,6 +26,10 @@ PWA en español para entrenar fuerza con un programa de 13 semanas centrado en *
 | **Guía** | Ilustraciones esquemáticas **originales** (SVG animado, dibujado en código), con preparación, ejecución, claves, errores comunes y alternativas. Puedes añadir tu propio video o enlace autorizado en cada ejercicio. La app no incluye enlaces de terceros. |
 | **PWA** | Instalable, con manifest, íconos (incluido apple‑touch‑icon) y service worker que precachea todo el build. Guarda inmediatamente cada serie y recupera la sesión tras cerrar o recargar. |
 | **Diseño** | Sistema morado: primario #6D28D9, secundario #A78BFA, superficie #EDE9FE, fondo #F8F5FF, texto #1F2937 / #6B7280, éxito #10B981, alerta #EF4444. Poppins para títulos y botones, Inter para texto (ambas servidas en local). Tarjetas de radio 16 px con sombra suave. Menú lateral en escritorio y barra inferior en móvil. Modo oscuro automático o manual, botones grandes (≥ 44 px), foco visible y respeto por «reducir movimiento». Los tokens están en `src/styles/global.css`. |
+
+## Imágenes
+
+Las fotos de Inicio, Entrenamiento y Programa son de [Pexels](https://www.pexels.com) y se usan bajo su [licencia](https://www.pexels.com/license/) (uso gratuito; la atribución no es obligatoria, pero se acredita a cada autor en Ajustes → Créditos). Están optimizadas en WebP en `public/images/` (unos 210 KB en total) para que funcionen sin conexión. La lista con autores y enlaces está en `src/data/photos.tsx`. Las ilustraciones de técnica del modo coach son originales y se mantienen porque muestran el movimiento exacto de cada ejercicio.
 
 ## Instalación local
 

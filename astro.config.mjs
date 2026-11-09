@@ -5,7 +5,7 @@ import tailwindcss from '@tailwindcss/vite';
 import { swPrecache } from './scripts/sw-precache-integration.mjs';
 
 export default defineConfig({
-  site: 'https://mi-entrenamiento.vercel.app',
+  site: 'https://weidry.vercel.app',
   output: 'static',
   integrations: [react(), swPrecache()],
   vite: {

@@ -1,5 +1,5 @@
 /**
- * Programa actualizado "Mi Entrenamiento" (13 semanas) adaptado al equipamiento real:
+ * Programa actualizado "Weidry" (13 semanas) adaptado al equipamiento real:
  * tres pares de mancuernas FIJAS de 10, 15 y 20 lb (por mancuerna), peso corporal y
  * alternativas domésticas ligeras (botellas de agua) para movimientos donde 10 lb es demasiado.
  *

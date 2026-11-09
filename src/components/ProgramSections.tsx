@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import { GUIDE } from '../data/guide';
+import { Img, PHOTOS } from '../data/photos';
 import { PHASES, PLAN_DAYS, PROGRAM_WEEKS, RIR_TARGET, SETS_PER_WEEK, getExercise, type StrengthDay } from '../data/plan';
 import { ExerciseIllustration } from './ExerciseIllustration';
 import { IconCalendar, IconDumbbell, IconFlex, IconHeart, IconHip } from './icons';
@@ -12,25 +13,6 @@ const DAY_ICON: Record<StrengthDay, ReactNode> = {
   C: <IconHip size={28} />,
   D: <IconDumbbell size={28} />,
 };
-
-/** Arte decorativo original: dos mancuernas hexagonales. */
-function DumbbellArt() {
-  const db = (x: number, y: number, s: number) => (
-    <g transform={`translate(${x} ${y}) scale(${s})`}>
-      <rect x="-34" y="-5" width="68" height="10" rx="5" fill="#4b5563" />
-      <path d="M-54 -22 l10 -6 h8 l10 6 v44 l-10 6 h-8 l-10 -6z" fill="#1f2937" />
-      <path d="M26 -22 l10 -6 h8 l10 6 v44 l-10 6 h-8 l-10 -6z" fill="#1f2937" />
-      <path d="M-50 -18 l6 -4 h6 l6 4" stroke="#6b7280" strokeWidth="2" fill="none" />
-      <path d="M30 -18 l6 -4 h6 l6 4" stroke="#6b7280" strokeWidth="2" fill="none" />
-    </g>
-  );
-  return (
-    <svg viewBox="0 0 220 110" className="h-full w-full" aria-hidden>
-      {db(62, 55, 0.8)}
-      {db(158, 72, 0.8)}
-    </svg>
-  );
-}
 
 export function ProgramOverview({ currentWeek }: { currentWeek: number | null }) {
   return (
@@ -49,7 +31,8 @@ export function ProgramOverview({ currentWeek }: { currentWeek: number | null })
           </div>
         </div>
         <div className="absolute bottom-0 right-0 top-0 hidden w-1/2 sm:block">
-          <DumbbellArt />
+          <Img photo={PHOTOS.mancuernas} className="h-full w-full" />
+          <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-[#e6dbff] to-transparent dark:from-[#30205a]" aria-hidden />
         </div>
       </section>
 

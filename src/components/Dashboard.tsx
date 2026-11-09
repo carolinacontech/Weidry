@@ -1,5 +1,5 @@
 import { useState, type ReactNode } from 'react';
-import { GUIDE } from '../data/guide';
+import { Img, PHOTOS } from '../data/photos';
 import { DAY_LABELS, PLAN_DAYS, PROGRAM_START, PROGRAM_WEEKS, getExercise, type StrengthDay } from '../data/plan';
 import { useAdjustments, useCardio, useInventory, useMeasurements, useProfile, useSessions, useSettings } from '../hooks/useData';
 import { navigate } from '../hooks/useRoute';
@@ -10,7 +10,6 @@ import { cardioThisWeek, strengthChangePct } from '../lib/stats';
 import type { LoadAdjustment, Measurement, WorkoutSession } from '../lib/types';
 import { formatWeight, type InventoryItem, type Unit } from '../lib/weights';
 import { CardioLogger } from './CardioLogger';
-import { ExerciseIllustration } from './ExerciseIllustration';
 import { IconBell, IconCalendar, IconCheck, IconDumbbell, IconFlex, IconHeart, IconHip, IconPlay, IconScale, IconTape } from './icons';
 import { StartWorkoutButton, discardSession, useActiveSession } from './StartWorkout';
 import { Button, Card, Loading, Modal, ProgressRing } from './ui';
@@ -180,9 +179,9 @@ function ObjectiveCard() {
           ))}
         </ul>
       </div>
-      <div className="absolute bottom-0 right-0 top-0 w-[45%]" aria-hidden>
-        <div className="absolute left-1/2 top-1/2 aspect-square w-[85%] -translate-x-1/2 -translate-y-1/2 rounded-full bg-white/45 dark:bg-white/10" />
-        <ExerciseIllustration pattern="bridge" label="Hip thrust" className="absolute inset-0 !bg-transparent" />
+      <div className="absolute bottom-0 right-0 top-0 w-[46%]">
+        <Img photo={PHOTOS.objetivo} className="h-full w-full" />
+        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-[#e6dbff] via-[#e6dbff]/40 to-transparent dark:from-[#30205a] dark:via-[#30205a]/40" aria-hidden />
       </div>
     </section>
   );
@@ -239,7 +238,6 @@ function NextWorkoutCard({
       </Card>
     );
   const day = PLAN_DAYS[next.dayKey];
-  const first = getExercise(day.slots[0].exerciseId)!;
   const dbs = day.slots
     .map((slot) => proposedOption({ ex: getExercise(slot.exerciseId)!, slot, week: next.week, inventory, adjustments, sessions, unit }).option)
     .filter((o) => o.kind === 'db')
@@ -252,8 +250,8 @@ function NextWorkoutCard({
     <Card aria-labelledby="next-title">
       <h2 className="mb-4 font-display text-lg font-semibold">Próximo entrenamiento</h2>
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-2xl bg-gradient-to-br from-[#f3edff] to-[#d8c8fb] sm:w-40 dark:from-[#2a1d44] dark:to-[#3b2a63]">
-          <ExerciseIllustration pattern={GUIDE[first.id].pattern} label={first.nameEs} className="h-full w-full !bg-transparent" />
+        <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-2xl bg-primary-soft sm:w-44">
+          <Img photo={PHOTOS[next.dayKey]} className="h-full w-full" />
         </div>
         <div className="flex flex-1 flex-col gap-2">
           <span className="w-fit rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">

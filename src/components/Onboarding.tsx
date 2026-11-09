@@ -17,7 +17,7 @@ export function Onboarding() {
       <span className="grid h-16 w-16 place-items-center rounded-2xl bg-primary text-white shadow-card">
         <Logo size={40} />
       </span>
-      <h1 className="font-display text-3xl font-bold leading-tight">Hola, te damos la bienvenida a Mi Entrenamiento</h1>
+      <h1 className="font-display text-3xl font-bold leading-tight">Hola, te damos la bienvenida a Weidry</h1>
       <p className="text-lg text-muted">Un programa de fuerza de 13 semanas, guiado serie a serie, que empieza el {formatLong(PROGRAM_START).toLowerCase()}.</p>
       <ul className="flex flex-col gap-2">
         {['4 días de fuerza (A, B, C, D) con énfasis en glúteos + 2 de cardio + 1 de descanso', 'Pensado para tus mancuernas de 10, 15 y 20 lb, peso corporal y botellas de agua', 'Registras peso real, repeticiones y repeticiones en reserva (RIR)', 'Modo coach con temporizador, indicaciones y comandos de voz', 'Nada cambia sin tu aprobación · funciona sin conexión y sin cuenta'].map((t) => (

@@ -30,6 +30,7 @@ import {
 } from '../lib/platform';
 import type { Settings } from '../lib/types';
 import { DEFAULT_INVENTORY, formatWeight, itemLb, type InventoryItem, type Unit } from '../lib/weights';
+import { Img, PHOTOS } from '../data/photos';
 import { uid } from '../lib/session';
 import { speechRecognitionSupported } from '../lib/voiceCommands';
 import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, Toggle, inputClass, useToast } from './ui';
@@ -106,12 +107,30 @@ export function SettingsView() {
       </Section>
       <DataSection />
       <LimitationsSection />
+      <Section title="Créditos de imágenes" id="s-creditos">
+        <p className="mb-2 text-sm text-muted">
+          Fotografías de{' '}
+          <a href="https://www.pexels.com" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">Pexels</a>{' '}
+          bajo su{' '}
+          <a href="https://www.pexels.com/license/" target="_blank" rel="noopener noreferrer" className="font-semibold text-primary">licencia</a>. Las ilustraciones de técnica son originales de la app.
+        </p>
+        <ul className="divide-y divide-line text-sm">
+          {Object.values(PHOTOS).map((p) => (
+            <li key={p.src} className="flex items-center gap-3 py-2">
+              <Img photo={p} className="h-10 w-14 shrink-0 rounded-lg" decorative />
+              <a href={p.url} target="_blank" rel="noopener noreferrer" className="hover:underline">
+                {p.alt} · <span className="text-muted">foto de {p.author}</span>
+              </a>
+            </li>
+          ))}
+        </ul>
+      </Section>
       <Section title="Aviso de salud" id="s-salud">
         <p className="text-sm leading-relaxed">
-          Mi Entrenamiento ofrece un programa general de fuerza y cardio. No es un servicio médico, no diagnostica ni trata ninguna condición y no garantiza resultados estéticos ni de peso. Las cargas son referencias que debes ajustar a tu capacidad real. Con hígado graso u otras condiciones clínicas, embarazo, lesiones, medicación o síntomas como dolor en el pecho, mareo o falta de aire, consulta con un profesional de la salud antes de empezar o continuar.
+          Weidry ofrece un programa general de fuerza y cardio. No es un servicio médico, no diagnostica ni trata ninguna condición y no garantiza resultados estéticos ni de peso. Las cargas son referencias que debes ajustar a tu capacidad real. Con hígado graso u otras condiciones clínicas, embarazo, lesiones, medicación o síntomas como dolor en el pecho, mareo o falta de aire, consulta con un profesional de la salud antes de empezar o continuar.
         </p>
       </Section>
-      <p className="pb-4 text-center text-xs text-muted">Mi Entrenamiento · v1.0 · funciona sin conexión</p>
+      <p className="pb-4 text-center text-xs text-muted">Weidry · v1.0 · funciona sin conexión</p>
     </div>
   );
 }
@@ -382,7 +401,7 @@ function ReminderSection({ settings, set }: { settings: Settings; set: (p: Parti
           </div>
         ) : null}
         {perm === 'granted' ? (
-          <Button variant="secondary" size="sm" className="mt-2" onClick={async () => { const ok = await showLocalNotification('Mi Entrenamiento', 'Así se verán tus recordatorios.'); if (!ok) toast('No se pudo mostrar la notificación', 'error'); }}>
+          <Button variant="secondary" size="sm" className="mt-2" onClick={async () => { const ok = await showLocalNotification('Weidry', 'Así se verán tus recordatorios.'); if (!ok) toast('No se pudo mostrar la notificación', 'error'); }}>
             Enviar notificación de prueba
           </Button>
         ) : null}
@@ -412,7 +431,7 @@ function DataSection() {
       cardio: await db.cardio.toArray(),
       adjustments: await db.adjustments.toArray(),
     };
-    downloadFile(`mi-entrenamiento-${stamp}.json`, JSON.stringify(makeBackup(data), null, 2), 'application/json');
+    downloadFile(`weidry-${stamp}.json`, JSON.stringify(makeBackup(data), null, 2), 'application/json');
     setBusy(false);
     toast('Copia exportada');
   };

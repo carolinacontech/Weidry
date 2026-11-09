@@ -1,9 +1,9 @@
 {
-  "name": "mi-entrenamiento",
+  "name": "weidry",
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "Mi Entrenamiento: PWA de entrenamiento de fuerza en español, mobile first.",
+  "description": "Weidry: PWA de entrenamiento de fuerza en español, mobile first.",
   "scripts": {
     "dev": "astro dev",
     "build": "astro build",

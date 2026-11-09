@@ -50,7 +50,7 @@ function Sidebar({ route }: { route: string }) {
     <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden bg-gradient-to-b from-[var(--sidebar-from)] to-[var(--sidebar-to)] text-white lg:flex" aria-label="Menú principal">
       <a href="#/" className="flex items-center gap-2 px-6 pb-6 pt-7 font-display text-xl font-bold">
         <span className="text-[#c4b5fd]"><Logo /></span>
-        Mi Entrenamiento
+        Weidry
       </a>
       <nav className="flex-1 px-3">
         <ul className="flex flex-col gap-1">
@@ -119,14 +119,14 @@ async function maybeNotify() {
     if (done > 0) return;
     const active = await getActiveSession();
     const ok = await showLocalNotification(
-      'Mi Entrenamiento',
+      'Weidry',
       active ? 'Tienes una sesión sin terminar. ¿La retomamos?' : `Hoy toca ${DAY_LABELS[pd.dayKey]}. Una versión corta también cuenta.`,
     );
     if (ok) await updateSettings({ lastNotifiedDate: today() });
   } else if (pd.dayKey === 'cardio') {
     const done = await db.cardio.where('date').equals(today()).count();
     if (done > 0) return;
-    const ok = await showLocalNotification('Mi Entrenamiento', 'Hoy toca cardio a ritmo moderado.');
+    const ok = await showLocalNotification('Weidry', 'Hoy toca cardio a ritmo moderado.');
     if (ok) await updateSettings({ lastNotifiedDate: today() });
   }
 }
@@ -158,7 +158,7 @@ function Shell() {
     return () => m.removeEventListener('change', on);
   }, [settings?.theme]);
 
-  if (!settings) return <Loading label="Abriendo Mi Entrenamiento…" />;
+  if (!settings) return <Loading label="Abriendo Weidry…" />;
   if (!settings.onboarded) return <Onboarding />;
 
   const coach = route.match(/^\/coach\/(.+)$/);

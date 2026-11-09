@@ -32,7 +32,7 @@ export function parseBackup(text: string): Backup {
   }
   const b = obj as Partial<Backup>;
   if (!b || b.app !== 'mi-entrenamiento' || b.version !== 1 || !b.data) {
-    throw new Error('El archivo no parece una copia de Mi Entrenamiento.');
+    throw new Error('El archivo no parece una copia de Weidry.');
   }
   const d = b.data;
   for (const k of ['kv', 'sessions', 'measurements', 'cardio', 'adjustments'] as const) {
