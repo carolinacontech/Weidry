@@ -1,64 +1,73 @@
 @import 'tailwindcss';
-@import '@fontsource-variable/inter';
-@import '@fontsource/poppins/500.css';
-@import '@fontsource/poppins/600.css';
-@import '@fontsource/poppins/700.css';
+@import '@fontsource-variable/dm-sans';
+@import '@fontsource-variable/manrope';
+@import './proto.css';
 
 @custom-variant dark (&:where(.dark, .dark *));
 
 /* Tokens del sistema de diseño: morado principal, lavanda, blanco. */
 :root {
-  --primary: #6d28d9;
-  --primary-600: #5b21b6;
-  --primary-soft: #ede9fe;
+  /* Tokens del prototipo Weidry (antes FitDefinida). */
+  --primary: #6933bf; /* --violet */
+  --primary-600: #4a2388; /* --violet-dark */
+  --primary-soft: #efe5fc; /* --violet-light */
   --on-primary: #ffffff;
-  --secondary: #a78bfa;
-  --accent: #7c3aed;
-  --accent-soft: #f3e8ff;
-  --bg: #f8f5ff;
+  --secondary: #ab86ed; /* --lavender */
+  --accent: #7442b3;
+  --accent-soft: #f3edfa;
+  --bg: #f8f6fc;
   --surface: #ffffff;
-  --surface-2: #f5f1ff;
-  --ink: #1f2937;
-  --muted: #6b7280;
-  --line: #ebe5f7;
-  --success: #10b981;
-  --success-soft: #d1fae5;
-  --warn: #92400e;
-  --warn-soft: #fef3c7;
-  --danger: #dc2626;
-  --danger-soft: #fee2e2;
-  --focus: #6d28d9;
-  --sidebar-from: #3b0f6e;
-  --sidebar-to: #5b21b6;
-  --radius: 16px;
-  --shadow: 0 8px 24px rgba(109, 40, 217, 0.08);
+  --surface-2: #faf8fc;
+  --ink: #241634;
+  /* --muted del prototipo es #82768f; se oscurece ligeramente para cumplir contraste AA en texto pequeño. */
+  --muted: #6f6380;
+  --line: #eae4f1;
+  --success: #189976;
+  --success-soft: #edf8f4;
+  --warn: #8a5300;
+  --warn-soft: #fdf3e2;
+  --danger: #c2334d;
+  --danger-soft: #fde8ec;
+  --focus: #b297f7;
+  --sidebar-from: #332047;
+  --sidebar-mid: #4b2b69;
+  --sidebar-to: #6a4095;
+  --radius: 20px;
+  --shadow: 0 10px 35px rgba(67, 33, 99, 0.065);
+  --hero-1: #e4d0f7;
+  --hero-2: #ede0fc;
+  --hero-3: #f3e9ff;
   color-scheme: light;
 }
 
 .dark {
-  --primary: #a78bfa;
-  --primary-600: #c4b5fd;
-  --primary-soft: #2e1f4f;
-  --on-primary: #1a0b33;
-  --secondary: #7c5cc4;
-  --accent: #c4b5fd;
-  --accent-soft: #2a1d44;
-  --bg: #120d1c;
-  --surface: #1c1528;
-  --surface-2: #251c35;
-  --ink: #f3f0fa;
-  --muted: #b3aac4;
-  --line: #342a47;
-  --success: #34d399;
-  --success-soft: #0f3a2c;
-  --warn: #fbbf24;
-  --warn-soft: #3a2c0c;
-  --danger: #f87171;
-  --danger-soft: #3d1a1a;
-  --focus: #c4b5fd;
-  --sidebar-from: #1a0b33;
-  --sidebar-to: #2e1065;
-  --shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  --primary: #b691f5;
+  --primary-600: #d3bafa;
+  --primary-soft: #2f2145;
+  --on-primary: #1d0f30;
+  --secondary: #8e64d0;
+  --accent: #c9a8fa;
+  --accent-soft: #2a1f3b;
+  --bg: #150f1d;
+  --surface: #1e1629;
+  --surface-2: #241b31;
+  --ink: #f4effa;
+  --muted: #b8aac7;
+  --line: #352a45;
+  --success: #3fc79e;
+  --success-soft: #12322a;
+  --warn: #f2c06a;
+  --warn-soft: #3a2c12;
+  --danger: #f08ea0;
+  --danger-soft: #3d1b23;
+  --focus: #c9a8fa;
+  --sidebar-from: #1a1024;
+  --sidebar-mid: #26173a;
+  --sidebar-to: #3a2457;
+  --shadow: 0 10px 35px rgba(0, 0, 0, 0.35);
+  --hero-1: #3a2659;
+  --hero-2: #2e2047;
+  --hero-3: #251a39;
   color-scheme: dark;
 }
 
@@ -82,8 +91,8 @@
   --color-warn-soft: var(--warn-soft);
   --color-danger: var(--danger);
   --color-danger-soft: var(--danger-soft);
-  --font-sans: 'Inter Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
-  --font-display: 'Poppins', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-sans: 'DM Sans Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
+  --font-display: 'Manrope Variable', ui-sans-serif, system-ui, -apple-system, sans-serif;
   --shadow-card: var(--shadow);
 }
 

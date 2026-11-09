@@ -31,7 +31,7 @@ describe('propuesta de carga', () => {
   });
 
   it('con historial NO sube sola aunque la tabla suba: mantiene tu nivel y lo indica', () => {
-    const p = proposedOption({ ...base, week: 3, sessions: [doneSession(2, 10)] });
+    const p = proposedOption({ ...base, week: 4, sessions: [doneSession(3, 10)] });
     expect(p.option).toMatchObject({ kind: 'db', lb: 10 });
     expect(p.planOption).toMatchObject({ kind: 'db', lb: 15 });
     expect(p.belowPlan).toBe(true);

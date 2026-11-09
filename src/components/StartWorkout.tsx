@@ -5,7 +5,7 @@ import { navigate } from '../hooks/useRoute';
 import { db, getActiveSession, getInventory, getSettings, saveSession } from '../lib/db';
 import { unlockAudio } from '../lib/platform';
 import { createSession } from '../lib/session';
-import { Button, Modal, useToast } from './ui';
+import { Modal, useToast } from './ui';
 
 export function useActiveSession() {
   return useLiveQuery(async () => (await getActiveSession()) ?? null);
@@ -19,19 +19,27 @@ export async function discardSession(id: string) {
   else await db.sessions.delete(id);
 }
 
+/** Crea y guarda una sesión nueva para un día del plan. */
+export async function startSession(p: { date: string; week: number; dayKey: 'A' | 'B' | 'C' | 'D'; skipWarmup?: boolean }) {
+  const [settings, inventory, adjustments, sessions] = await Promise.all([getSettings(), getInventory(), db.adjustments.toArray(), db.sessions.toArray()]);
+  const s = createSession({ ...p, inventory, adjustments, sessions, unit: settings.unit });
+  await saveSession(s);
+  return s;
+}
+
 export function StartWorkoutButton({
   date,
   week,
   dayKey,
-  label = 'Empezar entrenamiento',
-  size = 'xl',
+  label = 'Comenzar',
+  className = 'btn btn-primary',
   icon,
 }: {
   date: string;
   week: number;
   dayKey: 'A' | 'B' | 'C' | 'D';
   label?: string;
-  size?: 'md' | 'lg' | 'xl';
+  className?: string;
   icon?: ReactNode;
 }) {
   const toast = useToast();
@@ -42,10 +50,8 @@ export function StartWorkoutButton({
   const create = async () => {
     setLoading(true);
     try {
-      const [settings, inventory, adjustments, sessions] = await Promise.all([getSettings(), getInventory(), db.adjustments.toArray(), db.sessions.toArray()]);
-      const s = createSession({ date, week, dayKey, inventory, adjustments, sessions, unit: settings.unit });
-      await saveSession(s);
-      navigate(`/coach/${s.id}`);
+      await startSession({ date, week, dayKey });
+      navigate('/entrenamiento');
     } catch (e) {
       console.error(e);
       toast('No se pudo crear la sesión', 'error');
@@ -62,19 +68,21 @@ export function StartWorkoutButton({
 
   return (
     <>
-      <Button size={size} className="w-full" onClick={onClick} loading={loading}>
-        {icon}
-        {label}
-      </Button>
+      <button type="button" className={className} onClick={onClick} disabled={loading} aria-busy={loading || undefined}>
+        {label} {icon ?? <span aria-hidden>→</span>}
+      </button>
       <Modal
         open={conflict}
         onClose={() => setConflict(false)}
         title="Tienes una sesión sin terminar"
         footer={
           <div className="grid gap-2">
-            <Button onClick={() => active && navigate(`/coach/${active.id}`)}>Reanudar {active ? DAY_LABELS[active.dayKey] : ''}</Button>
-            <Button
-              variant="danger"
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/entrenamiento')}>
+              Reanudar {active ? DAY_LABELS[active.dayKey] : ''}
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
               onClick={async () => {
                 if (active) await discardSession(active.id);
                 setConflict(false);
@@ -82,7 +90,7 @@ export function StartWorkoutButton({
               }}
             >
               Cerrarla y empezar {DAY_LABELS[dayKey]}
-            </Button>
+            </button>
           </div>
         }
       >

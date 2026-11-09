@@ -49,6 +49,23 @@ export const PHASES: { weeks: number[]; label: string; name: string }[] = [
   { weeks: [10, 11, 12, 13], label: 'Sem 10–13', name: 'Consolidación' },
 ];
 
+/** Objetivo de cada semana (texto del prototipo). */
+export const WEEK_FOCUS = [
+  'Aprender técnica y encontrar cargas cómodas',
+  'Mejorar técnica y terminar las series con control',
+  'Construir volumen de entrenamiento',
+  'Construir volumen de entrenamiento',
+  'Recuperación: menos series y cargas conservadoras',
+  'Fortalecer movimientos principales',
+  'Fortalecer movimientos principales',
+  'Fortalecer movimientos principales',
+  'Recuperación: menor volumen',
+  'Consolidar fuerza y confianza',
+  'Consolidar fuerza y confianza',
+  'Evaluar progreso sin forzar el peso',
+  'Completar el ciclo y celebrar avances',
+] as const;
+
 export function phaseFor(week: number) {
   return PHASES.find((p) => p.weeks.includes(week)) ?? PHASES[0];
 }
@@ -75,6 +92,8 @@ export interface Exercise {
   restSec: number;
   /** Trabajo principal de glúteo. */
   glute?: boolean;
+  /** Indicación breve de técnica. */
+  cue?: string;
   /** Ejercicio que ya no forma parte del plan (se conserva para el historial). */
   legacy?: boolean;
 }
@@ -90,6 +109,7 @@ export interface PlanSlot {
 export interface PlanDay {
   key: StrengthDay;
   title: string;
+  short: string;
   weekday: string;
   focus: string;
   slots: PlanSlot[];
@@ -97,34 +117,36 @@ export interface PlanDay {
 
 /** Catálogo de ejercicios (incluye los antiguos, para mostrar el historial). */
 export const EXERCISES: Record<string, Exercise> = {
-  // ----- A
-  'glute-bridge': { id: 'glute-bridge', name: 'Dumbbell hip thrust / glute bridge', nameEs: 'Hip thrust / puente de glúteo con mancuerna', mode: 'held', allowBody: true, reps: '10-12', repsMin: 10, repsMax: 12, restSec: 90, glute: true },
-  'goblet-squat': { id: 'goblet-squat', name: 'Goblet squat', nameEs: 'Sentadilla goblet', mode: 'held', allowBody: true, reps: '10-12', repsMin: 10, repsMax: 12, restSec: 90, glute: true },
-  'romanian-deadlift': { id: 'romanian-deadlift', name: 'Romanian deadlift', nameEs: 'Peso muerto rumano', mode: 'each', reps: '10-12', repsMin: 10, repsMax: 12, restSec: 120, glute: true },
-  'reverse-lunge': { id: 'reverse-lunge', name: 'Reverse lunge', nameEs: 'Zancada hacia atrás', mode: 'each', allowBody: true, reps: '8-10 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true },
-  'front-plank': { id: 'front-plank', name: 'Front plank', nameEs: 'Plancha frontal', mode: 'body', reps: '20-40 s', repsMin: 20, repsMax: 40, timed: true, restSec: 60 },
-  // ----- B
-  'single-arm-row': { id: 'single-arm-row', name: 'Single-arm row', nameEs: 'Remo a una mano', mode: 'one', reps: '10-12 por lado', repsMin: 10, repsMax: 12, perSide: true, restSec: 90 },
-  'floor-press': { id: 'floor-press', name: 'Dumbbell floor press', nameEs: 'Press de pecho en el suelo', mode: 'each', reps: '10-12', repsMin: 10, repsMax: 12, restSec: 90 },
-  'shoulder-press': { id: 'shoulder-press', name: 'Seated shoulder press', nameEs: 'Press de hombros sentada', mode: 'each', allowLight: true, reps: '8-12', repsMin: 8, repsMax: 12, restSec: 90 },
-  'biceps-curl': { id: 'biceps-curl', name: 'Biceps curl', nameEs: 'Curl de bíceps', mode: 'each', allowLight: true, reps: '10-12', repsMin: 10, repsMax: 12, restSec: 60 },
-  'dead-bug': { id: 'dead-bug', name: 'Dead bug', nameEs: 'Bicho muerto (dead bug)', mode: 'body', reps: '8 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 60 },
-  // ----- C
-  'sumo-squat': { id: 'sumo-squat', name: 'Sumo squat', nameEs: 'Sentadilla sumo', mode: 'held', allowBody: true, reps: '10-12', repsMin: 10, repsMax: 12, restSec: 90, glute: true },
-  'split-squat': { id: 'split-squat', name: 'Bulgarian split squat', nameEs: 'Sentadilla búlgara (pie trasero en sofá/silla)', mode: 'each', allowBody: true, reps: '8-10 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true },
-  'single-leg-bridge': { id: 'single-leg-bridge', name: 'Single-leg glute bridge', nameEs: 'Puente de glúteo a una pierna', mode: 'held', allowBody: true, reps: '10-12 por lado', repsMin: 10, repsMax: 12, perSide: true, restSec: 60, glute: true },
-  'side-lying-abduction': { id: 'side-lying-abduction', name: 'Side-lying hip abduction', nameEs: 'Abducción de cadera tumbada de lado', mode: 'body', reps: '15-20 por lado', repsMin: 15, repsMax: 20, perSide: true, restSec: 60, glute: true },
-  'side-plank': { id: 'side-plank', name: 'Side plank', nameEs: 'Plancha lateral', mode: 'body', reps: '15-30 s por lado', repsMin: 15, repsMax: 30, timed: true, perSide: true, restSec: 60 },
-  // ----- D
-  'bent-over-row': { id: 'bent-over-row', name: 'Bent-over dumbbell row', nameEs: 'Remo inclinado con mancuernas', mode: 'each', reps: '10-12', repsMin: 10, repsMax: 12, restSec: 90 },
-  'single-leg-rdl': { id: 'single-leg-rdl', name: 'Supported single-leg RDL', nameEs: 'Peso muerto rumano a una pierna con apoyo', mode: 'one', allowBody: true, reps: '8-10 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true },
-  'lateral-raise': { id: 'lateral-raise', name: 'Lateral raise', nameEs: 'Elevaciones laterales', mode: 'each', allowLight: true, reps: '12-15', repsMin: 12, repsMax: 15, restSec: 60 },
-  'triceps-kickback': { id: 'triceps-kickback', name: 'Triceps kickback', nameEs: 'Patada de tríceps', mode: 'each', allowLight: true, reps: '12-15', repsMin: 12, repsMax: 15, restSec: 60 },
-  'incline-push-up': { id: 'incline-push-up', name: 'Incline push-up', nameEs: 'Flexión inclinada', mode: 'body', reps: '8-12', repsMin: 8, repsMax: 12, restSec: 60 },
-  // ----- Ejercicios del programa anterior (solo historial)
-  'step-up': { id: 'step-up', name: 'Low step-up', nameEs: 'Subida a escalón bajo', mode: 'each', allowBody: true, reps: '10 por lado', repsMin: 10, repsMax: 10, perSide: true, restSec: 90, legacy: true },
-  'calf-raise': { id: 'calf-raise', name: 'Standing calf raise', nameEs: 'Elevación de talones de pie', mode: 'each', reps: '15', repsMin: 15, repsMax: 15, restSec: 60, legacy: true },
-  'hammer-curl': { id: 'hammer-curl', name: 'Hammer curl', nameEs: 'Curl martillo', mode: 'each', allowLight: true, reps: '12', repsMin: 12, repsMax: 12, restSec: 60, legacy: true },
+  // ----- A · Piernas y glúteos A
+  'goblet-squat': { id: 'goblet-squat', name: 'Goblet squat', nameEs: 'Sentadilla goblet', mode: 'held', allowBody: true, reps: '10–12', repsMin: 10, repsMax: 12, restSec: 90, glute: true, cue: 'Pecho estable, rodillas alineadas y baja con control. Usa una silla si necesitas apoyo.' },
+  'romanian-deadlift': { id: 'romanian-deadlift', name: 'Romanian deadlift', nameEs: 'Peso muerto rumano', mode: 'each', reps: '8–12', repsMin: 8, repsMax: 12, restSec: 120, glute: true, cue: 'Lleva la cadera hacia atrás y conserva la espalda neutral.' },
+  'glute-bridge': { id: 'glute-bridge', name: 'Weighted glute bridge', nameEs: 'Puente de glúteos', mode: 'held', allowBody: true, reps: '12–15', repsMin: 12, repsMax: 15, restSec: 90, glute: true, cue: 'Empuja con los talones y aprieta los glúteos al subir. Mantén las costillas abajo.' },
+  'reverse-lunge': { id: 'reverse-lunge', name: 'Reverse lunge', nameEs: 'Zancada atrás', mode: 'held', allowBody: true, reps: '8–10 por pierna', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true, cue: 'Da un paso hacia atrás; utiliza apoyo para mantener el equilibrio.' },
+  'front-plank': { id: 'front-plank', name: 'Front plank', nameEs: 'Plancha frontal', mode: 'body', reps: '15–30 segundos', repsMin: 15, repsMax: 30, timed: true, restSec: 60, cue: 'Mantén glúteos y abdomen activos sin hundir la espalda.' },
+  // ----- B · Espalda, pecho y brazos
+  'single-arm-row': { id: 'single-arm-row', name: 'Single-arm row', nameEs: 'Remo a una mano', mode: 'one', reps: '10–12 por lado', repsMin: 10, repsMax: 12, perSide: true, restSec: 90, cue: 'Apoya la mano libre y lleva el codo hacia la cadera.' },
+  'floor-press': { id: 'floor-press', name: 'Dumbbell floor press', nameEs: 'Press de pecho en suelo', mode: 'each', reps: '8–12', repsMin: 8, repsMax: 12, restSec: 90, cue: 'Codos a unos 45° del torso; controla el descenso.' },
+  'incline-push-up': { id: 'incline-push-up', name: 'Incline push-up', nameEs: 'Flexiones inclinadas', mode: 'body', reps: '8–12', repsMin: 8, repsMax: 12, restSec: 60, cue: 'Usa una superficie estable y elevada; conserva alineado el tronco.' },
+  'biceps-curl': { id: 'biceps-curl', name: 'Biceps curl', nameEs: 'Curl de bíceps', mode: 'each', allowLight: true, reps: '8–12', repsMin: 8, repsMax: 12, restSec: 60, cue: 'Si 10 lb es demasiado, usa botellas ligeras. No balancees el cuerpo.' },
+  'dead-bug': { id: 'dead-bug', name: 'Dead bug', nameEs: 'Dead bug', mode: 'body', reps: '8 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 60, cue: 'Desciende el brazo y la pierna contrarios sin arquear la zona lumbar.' },
+  // ----- C · Piernas y glúteos B
+  'sumo-squat': { id: 'sumo-squat', name: 'Sumo squat', nameEs: 'Sentadilla sumo', mode: 'held', allowBody: true, reps: '10–12', repsMin: 10, repsMax: 12, restSec: 90, glute: true, cue: 'Separa un poco más los pies y mantén las rodillas alineadas.' },
+  'step-up': { id: 'step-up', name: 'Low step-up', nameEs: 'Step-up bajo', mode: 'held', allowBody: true, reps: '10 por pierna', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true, cue: 'Usa un escalón firme y bajo; evita impulsarte con la pierna de abajo.' },
+  'calf-raise': { id: 'calf-raise', name: 'Standing calf raise', nameEs: 'Elevaciones de talones', mode: 'each', reps: '15', repsMin: 12, repsMax: 15, restSec: 60, cue: 'Sube despacio y haz una pausa breve arriba.' },
+  'side-plank': { id: 'side-plank', name: 'Side plank', nameEs: 'Plancha lateral', mode: 'body', reps: '15–25 segundos por lado', repsMin: 15, repsMax: 25, timed: true, perSide: true, restSec: 60, cue: 'Apoya el antebrazo y mantén la cadera alineada.' },
+  // ----- D · Espalda, hombros y brazos
+  'bent-over-row': { id: 'bent-over-row', name: 'Bent-over dumbbell row', nameEs: 'Remo inclinado', mode: 'each', reps: '10–12', repsMin: 10, repsMax: 12, restSec: 90, cue: 'Inclina el torso desde la cadera y aprieta la espalda.' },
+  'shoulder-press': { id: 'shoulder-press', name: 'Shoulder press', nameEs: 'Press de hombros', mode: 'each', allowLight: true, reps: '8–12', repsMin: 8, repsMax: 12, restSec: 90, cue: 'No arquees la espalda. Usa botellas ligeras si 10 lb es demasiado.' },
+  'triceps-extension': { id: 'triceps-extension', name: 'Overhead triceps extension', nameEs: 'Extensión de tríceps', mode: 'held', allowLight: true, reps: '10–12', repsMin: 10, repsMax: 12, restSec: 60, cue: 'Mantén los codos estables; evita sobrecargar los hombros.' },
+  'hammer-curl': { id: 'hammer-curl', name: 'Hammer curl', nameEs: 'Curl martillo', mode: 'each', allowLight: true, reps: '8–12', repsMin: 8, repsMax: 12, restSec: 60, cue: 'Palmas mirando hacia adentro; movimiento lento y controlado.' },
+  'yt-raise': { id: 'yt-raise', name: 'Y / T raises', nameEs: 'Elevaciones Y / T', mode: 'body', reps: '8–12', repsMin: 8, repsMax: 12, restSec: 60, cue: 'Sube los brazos con control. Evita elevar demasiado los hombros.' },
+  // ----- Ejercicios de versiones anteriores (solo historial)
+  'split-squat': { id: 'split-squat', name: 'Bulgarian split squat', nameEs: 'Sentadilla búlgara', mode: 'each', allowBody: true, reps: '8-10 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true, legacy: true },
+  'single-leg-bridge': { id: 'single-leg-bridge', name: 'Single-leg glute bridge', nameEs: 'Puente de glúteo a una pierna', mode: 'held', allowBody: true, reps: '10-12 por lado', repsMin: 10, repsMax: 12, perSide: true, restSec: 60, glute: true, legacy: true },
+  'side-lying-abduction': { id: 'side-lying-abduction', name: 'Side-lying hip abduction', nameEs: 'Abducción de cadera tumbada', mode: 'body', reps: '15-20 por lado', repsMin: 15, repsMax: 20, perSide: true, restSec: 60, glute: true, legacy: true },
+  'single-leg-rdl': { id: 'single-leg-rdl', name: 'Supported single-leg RDL', nameEs: 'Peso muerto a una pierna', mode: 'one', allowBody: true, reps: '8-10 por lado', repsMin: 8, repsMax: 10, perSide: true, restSec: 90, glute: true, legacy: true },
+  'lateral-raise': { id: 'lateral-raise', name: 'Lateral raise', nameEs: 'Elevaciones laterales', mode: 'each', allowLight: true, reps: '12-15', repsMin: 12, repsMax: 15, restSec: 60, legacy: true },
+  'triceps-kickback': { id: 'triceps-kickback', name: 'Triceps kickback', nameEs: 'Patada de tríceps', mode: 'each', allowLight: true, reps: '12-15', repsMin: 12, repsMax: 15, restSec: 60, legacy: true },
 };
 
 /**
@@ -142,63 +164,67 @@ const BODY = rx('B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B')
 export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
   A: {
     key: 'A',
-    title: 'Piernas y Glúteos A',
+    title: 'Piernas & glúteos A',
+    short: 'Glúteos y piernas',
     weekday: 'Lunes',
-    focus: 'Glúteos y piernas (cadera dominante) · core',
+    focus: 'Glúteos y piernas · core',
     slots: [
-      { exerciseId: 'glute-bridge', rx: rx(15, 15, 15, 20, 15, 20, 20, 20, 15, 20, 20, 20, 20) },
-      { exerciseId: 'goblet-squat', rx: rx(10, 10, 15, 15, 10, 15, 15, 20, 15, 20, 20, 20, 20) },
-      { exerciseId: 'romanian-deadlift', rx: rx(10, 10, 10, 15, 10, 15, 15, 15, 10, 15, 15, 20, 20) },
-      { exerciseId: 'reverse-lunge', rx: rx('B', 'B', 'B', 10, 'B', 10, 10, 10, 'B', 10, 10, 15, 15) },
+      { exerciseId: 'goblet-squat', rx: rx(10, 10, 10, 15, 10, 15, 15, 20, 10, 20, 20, 20, 20) },
+      { exerciseId: 'romanian-deadlift', rx: rx(10, 10, 10, 10, 10, 15, 15, 15, 10, 15, 15, 20, 20) },
+      { exerciseId: 'glute-bridge', rx: rx(10, 10, 15, 15, 10, 15, 20, 20, 10, 20, 20, 20, 20) },
+      { exerciseId: 'reverse-lunge', rx: rx('B', 'B', 'B', 'B', 'B', 10, 10, 10, 'B', 10, 10, 15, 15) },
       { exerciseId: 'front-plank', fixedSets: 2, rx: BODY },
     ],
   },
   B: {
     key: 'B',
-    title: 'Espalda, Pecho y Brazos',
+    title: 'Espalda, pecho y brazos',
+    short: 'Tren superior A',
     weekday: 'Martes',
-    focus: 'Espalda, pecho, hombros y brazos · core',
+    focus: 'Espalda, pecho y brazos · core',
     slots: [
-      { exerciseId: 'single-arm-row', rx: rx(10, 10, 15, 15, 10, 15, 15, 20, 15, 20, 20, 20, 20) },
-      { exerciseId: 'floor-press', rx: rx(10, 10, 10, 10, 10, 15, 15, 15, 10, 15, 15, 15, 15) },
-      { exerciseId: 'shoulder-press', rx: rx('L', 'L', 'L', 'L', 'L', 10, 10, 10, 'L', 10, 10, 10, 10) },
-      { exerciseId: 'biceps-curl', rx: rx('L', 'L', 10, 10, 'L', 10, 10, 10, 'L', 10, 10, 10, 10) },
+      { exerciseId: 'single-arm-row', rx: rx(10, 10, 10, 15, 10, 15, 15, 15, 10, 15, 15, 20, 20) },
+      { exerciseId: 'floor-press', rx: rx(10, 10, 10, 10, 10, 10, 10, 15, 10, 15, 15, 15, 15) },
+      { exerciseId: 'incline-push-up', rx: BODY },
+      { exerciseId: 'biceps-curl', rx: rx(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10) },
       { exerciseId: 'dead-bug', fixedSets: 2, rx: BODY },
     ],
   },
   C: {
     key: 'C',
-    title: 'Piernas y Glúteos B',
+    title: 'Piernas & glúteos B',
+    short: 'Glúteos y piernas',
     weekday: 'Jueves',
-    focus: 'Glúteos (unilateral y glúteo medio) · core lateral',
+    focus: 'Glúteos y piernas · core lateral',
     slots: [
-      { exerciseId: 'sumo-squat', rx: rx(15, 15, 15, 20, 15, 20, 20, 20, 15, 20, 20, 20, 20) },
-      { exerciseId: 'split-squat', rx: rx('B', 'B', 'B', 'B', 'B', 10, 10, 10, 'B', 10, 10, 15, 15) },
-      { exerciseId: 'single-leg-bridge', rx: rx('B', 'B', 'B', 'B', 'B', 'B', 10, 10, 'B', 10, 10, 10, 10) },
-      { exerciseId: 'side-lying-abduction', rx: BODY },
+      { exerciseId: 'sumo-squat', rx: rx(10, 10, 10, 15, 10, 15, 15, 20, 10, 20, 20, 20, 20) },
+      { exerciseId: 'step-up', rx: rx('B', 'B', 'B', 'B', 'B', 10, 10, 10, 'B', 10, 10, 15, 15) },
+      { exerciseId: 'glute-bridge', rx: rx(10, 10, 15, 15, 10, 20, 20, 20, 10, 20, 20, 20, 20) },
+      { exerciseId: 'calf-raise', rx: rx(10, 10, 10, 10, 10, 10, 10, 15, 10, 15, 15, 20, 20) },
       { exerciseId: 'side-plank', fixedSets: 2, rx: BODY },
     ],
   },
   D: {
     key: 'D',
-    title: 'Hombros, Espalda y Brazos',
+    title: 'Espalda, hombros y brazos',
+    short: 'Tren superior B',
     weekday: 'Viernes',
-    focus: 'Espalda, hombros y brazos · glúteo unilateral',
+    focus: 'Espalda, hombros y brazos',
     slots: [
       { exerciseId: 'bent-over-row', rx: rx(10, 10, 10, 15, 10, 15, 15, 15, 10, 15, 15, 20, 20) },
-      { exerciseId: 'single-leg-rdl', rx: rx('B', 'B', 10, 10, 'B', 10, 10, 15, 10, 15, 15, 15, 15) },
-      { exerciseId: 'lateral-raise', rx: rx('L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L', 'L') },
-      { exerciseId: 'triceps-kickback', rx: rx('L', 'L', 'L', 'L', 'L', 'L', 'L', 10, 'L', 10, 10, 10, 10) },
-      { exerciseId: 'incline-push-up', rx: BODY },
+      { exerciseId: 'shoulder-press', rx: rx(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10) },
+      { exerciseId: 'triceps-extension', rx: rx(10, 10, 10, 10, 10, 10, 10, 15, 10, 15, 15, 15, 15) },
+      { exerciseId: 'hammer-curl', rx: rx(10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10, 10) },
+      { exerciseId: 'yt-raise', rx: BODY },
     ],
   },
 };
 
 export const DAY_LABELS: Record<DayKey, string> = {
-  A: 'Piernas y Glúteos A',
-  B: 'Espalda, Pecho y Brazos',
-  C: 'Piernas y Glúteos B',
-  D: 'Hombros, Espalda y Brazos',
+  A: 'Piernas & glúteos A',
+  B: 'Espalda, pecho y brazos',
+  C: 'Piernas & glúteos B',
+  D: 'Espalda, hombros y brazos',
   cardio: 'Cardio',
   rest: 'Descanso',
 };
@@ -213,6 +239,8 @@ export const DEFAULT_PROFILE = {
   weightLb: 148,
   goalWeightLb: 120,
   waistCm: 83,
+  /** Cadera inicial medida (cm). */
+  hipCm: 107,
   /** Referencia estética personal; NO es una predicción ni meta médica. */
   aestheticWaistCm: 60,
   /** Las prioridades son fuerza, glúteos y definición: los números de báscula/cintura se ocultan por defecto. */

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_INVENTORY, ladderFor, optionIndex, resolveRx } from '../src/lib/weights';
+import { GUIDE } from '../src/data/guide';
 import { CARDIO_MINUTES_PER_WEEK, EXERCISES, PLAN_DAYS, PROGRAM_WEEKS } from '../src/data/plan';
 import { cardioTargetForWeek, dateFor, isRecoveryWeek, plannedRx, programCalendar, programDayFor, setsFor, setsForWeek } from '../src/lib/program';
 
@@ -58,16 +59,29 @@ describe('programa de 13 semanas', () => {
     }
   });
 
-  it('no hay saltos de más de un escalón entre semanas consecutivas', () => {
+  it('no hay saltos de más de un escalón entre semanas consecutivas (fuera de la vuelta de recuperación)', () => {
     for (const day of Object.values(PLAN_DAYS))
       for (const slot of day.slots) {
         const lad = ladderFor(EXERCISES[slot.exerciseId], DEFAULT_INVENTORY);
         const idx = (w: number) => optionIndex(lad, resolveRx(slot.rx[w - 1], lad).option);
-        for (let w = 2; w <= PROGRAM_WEEKS; w++) expect(idx(w) - idx(w - 1), `${slot.exerciseId} S${w}`).toBeLessThanOrEqual(1);
+        // Al salir de una semana de recuperación se vuelve al nivel previo, así que esas transiciones no cuentan.
+        for (let w = 2; w <= PROGRAM_WEEKS; w++) if (!isRecoveryWeek(w - 1)) expect(idx(w) - idx(w - 1), `${slot.exerciseId} S${w}`).toBeLessThanOrEqual(1);
       }
   });
 
-  it('prioriza glúteos: cada día de tren inferior tiene al menos 4 ejercicios de glúteo', () => {
-    for (const k of ['A', 'C'] as const) expect(PLAN_DAYS[k].slots.filter((s) => EXERCISES[s.exerciseId].glute).length).toBeGreaterThanOrEqual(4);
+  it('coincide con las tablas del prototipo (muestras)', () => {
+    const codes = (k: 'A' | 'B' | 'C' | 'D', i: number) => PLAN_DAYS[k].slots[i].rx.map((r) => (r.kind === 'db' ? r.lb : 0));
+    expect(codes('A', 0)).toEqual([10, 10, 10, 15, 10, 15, 15, 20, 10, 20, 20, 20, 20]);
+    expect(codes('B', 1)).toEqual([10, 10, 10, 10, 10, 10, 10, 15, 10, 15, 15, 15, 15]);
+    expect(codes('C', 2)).toEqual([10, 10, 15, 15, 10, 20, 20, 20, 10, 20, 20, 20, 20]);
+    expect(codes('D', 2)).toEqual([10, 10, 10, 10, 10, 10, 10, 15, 10, 15, 15, 15, 15]);
+  });
+
+  it('cada ejercicio del plan tiene guía de técnica', () => {
+    for (const d of Object.values(PLAN_DAYS)) for (const s of d.slots) expect(GUIDE[s.exerciseId], s.exerciseId).toBeDefined();
+  });
+
+  it('prioriza glúteos: cada día de tren inferior tiene al menos 3 ejercicios de glúteo', () => {
+    for (const k of ['A', 'C'] as const) expect(PLAN_DAYS[k].slots.filter((s) => EXERCISES[s.exerciseId].glute).length).toBeGreaterThanOrEqual(3);
   });
 });

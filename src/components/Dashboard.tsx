@@ -1,21 +1,34 @@
-import { useState, type ReactNode } from 'react';
+import { useState } from 'react';
 import { Img, PHOTOS } from '../data/photos';
-import { DAY_LABELS, PLAN_DAYS, PROGRAM_START, PROGRAM_WEEKS, getExercise, type StrengthDay } from '../data/plan';
+import { DAY_LABELS, PLAN_DAYS, PROGRAM_WEEKS, getExercise, type StrengthDay } from '../data/plan';
 import { useAdjustments, useCardio, useInventory, useMeasurements, useProfile, useSessions, useSettings } from '../hooks/useData';
 import { navigate } from '../hooks/useRoute';
-import { addDays, formatLong, parseISODate, today } from '../lib/dates';
+import { addDays, formatShort, parseISODate, today } from '../lib/dates';
 import { dateFor, isRecoveryWeek, isStrengthDay, programDayFor, setsForWeek } from '../lib/program';
 import { proposedOption, sessionProgress } from '../lib/session';
-import { cardioThisWeek, strengthChangePct } from '../lib/stats';
-import type { LoadAdjustment, Measurement, WorkoutSession } from '../lib/types';
-import { formatWeight, type InventoryItem, type Unit } from '../lib/weights';
+import { cardioThisWeek } from '../lib/stats';
+import type { Measurement, WorkoutSession } from '../lib/types';
+import { itemLb } from '../lib/weights';
 import { CardioLogger } from './CardioLogger';
-import { IconBell, IconCalendar, IconCheck, IconDumbbell, IconFlex, IconHeart, IconHip, IconPlay, IconScale, IconTape } from './icons';
 import { StartWorkoutButton, discardSession, useActiveSession } from './StartWorkout';
-import { Button, Card, Loading, Modal, ProgressRing } from './ui';
+import { Loading, Modal } from './ui';
 
 const SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
-const WEEKDAYS = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
+const WEEKDAYS = ['LUNES', 'MARTES', 'MIÉRCOLES', 'JUEVES', 'VIERNES', 'SÁBADO', 'DOMINGO'];
+
+/** Ilustración del prototipo (hero). */
+function HeroArt() {
+  return (
+    <svg viewBox="0 0 330 290" fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden>
+      <path d="M170 35c-18 0-32 13-32 33 0 11 5 19 10 25l-23 19-18 52-38 15 7 16 50-16 17-35 1 47-30 64 17 11 42-67 31 65 20-11-32-80 4-33 18 34 48 11 6-17-34-13-26-56-25-17c7-7 12-17 12-28 0-21-13-33-29-33z" fill="#6737b7" opacity=".23" />
+      <circle cx="165" cy="65" r="28" fill="#9F6FCE" />
+      <path d="M142 94c-13 5-29 19-38 41l-20 34 15 10 32-37 14 20-2 48-28 42 21 10 40-56 18 51 21-7-16-71 1-38 13 34 45 15 8-19-35-13-17-48c-12-23-30-34-49-35z" fill="#8050C4" />
+      <path d="M149 101c17 10 37 10 51-1l-5 45-49 5 3-49z" fill="#EEE1FF" />
+      <path d="M88 168l-20-5-5 34 15 4zM263 173l10-1 8 35-17 2z" fill="#3B2552" />
+      <path d="M55 172h45M48 164v17M39 169v8M106 161v24M243 180h47M300 173v16M309 178v7M236 174v18" stroke="#3B2552" strokeWidth="7" strokeLinecap="round" />
+    </svg>
+  );
+}
 
 export function Dashboard() {
   const settings = useSettings();
@@ -27,7 +40,7 @@ export function Dashboard() {
   const adjustments = useAdjustments();
   const active = useActiveSession();
   const [cardioOpen, setCardioOpen] = useState(false);
-  const [bellOpen, setBellOpen] = useState(false);
+  const [discardOpen, setDiscardOpen] = useState(false);
 
   if (!settings || !sessions || !cardio || !measurements || !profile || !inventory || !adjustments || active === undefined) return <Loading />;
 
@@ -37,114 +50,267 @@ export function Dashboard() {
   const completed = sessions.filter((s) => s.status === 'completed');
   const doneThisWeek = new Set(completed.filter((s) => s.week === week).map((s) => s.dayKey));
   const cw = cardioThisWeek(cardio, t);
+  const totalPlanned = PROGRAM_WEEKS * 4;
+  const pct = Math.min(100, Math.round((completed.length / totalPlanned) * 100));
 
-  // Avisos (campana)
+  // Recordatorio dentro de la app
   const [hh, mm] = settings.reminderTime.split(':').map(Number);
   const now = new Date();
   const pastReminder = now.getHours() * 60 + now.getMinutes() >= hh * 60 + mm;
-  const alerts: { text: string; action?: () => void; actionLabel?: string }[] = [];
-  if (active) alerts.push({ text: `Tienes una sesión sin terminar: ${DAY_LABELS[active.dayKey]}.`, action: () => navigate(`/coach/${active.id}`), actionLabel: 'Reanudar' });
-  if (settings.reminderEnabled && pd.status === 'active' && pastReminder && isStrengthDay(pd.dayKey) && !doneThisWeek.has(pd.dayKey) && !active)
-    alerts.push({ text: `Hoy toca ${DAY_LABELS[pd.dayKey]}. Una versión corta también cuenta.` });
-  if (settings.reminderEnabled && pd.status === 'active' && pastReminder && pd.dayKey === 'cardio' && !cardio.some((c) => c.date === t))
-    alerts.push({ text: `Hoy toca cardio. Llevas ${cw.minutes} de ${cw.target} min esta semana.`, action: () => setCardioOpen(true), actionLabel: 'Registrar' });
-  if (pd.status === 'active' && isRecoveryWeek(week)) alerts.push({ text: 'Semana de recuperación: menos series y cargas más ligeras.' });
+  let reminder: string | null = null;
+  if (settings.reminderEnabled && pd.status === 'active' && pastReminder && !active) {
+    if (isStrengthDay(pd.dayKey) && !doneThisWeek.has(pd.dayKey)) reminder = `Hoy toca ${DAY_LABELS[pd.dayKey]}. Una versión corta también cuenta.`;
+    else if (pd.dayKey === 'cardio' && !cardio.some((c) => c.date === t)) reminder = `Hoy toca cardio: llevas ${cw.minutes} de ${cw.target} min esta semana.`;
+  }
 
   const next = nextStrength(t, completed);
-  const name = profile.name?.trim();
+  const latest = (k: keyof Measurement) => [...measurements].reverse().find((m) => m[k] !== undefined)?.[k] as number | undefined;
+  const weight = latest('weightLb') ?? profile.weightLb;
+  const waist = latest('waistCm') ?? profile.waistCm;
+  const hip = latest('hipCm') ?? profile.hipCm;
+  const pairs = inventory.filter((i) => i.kind === 'fixed' && i.count >= 2).sort((a, b) => itemLb(a) - itemLb(b));
+  const delta = (cur: number, start: number, unit: string) => (cur === start ? null : `${cur < start ? '−' : '+'}${Math.round(Math.abs(cur - start) * 10) / 10} ${unit} desde el inicio`);
 
   return (
-    <div className="flex flex-col gap-5">
-      <header className="flex items-start justify-between gap-3">
-        <div>
-          <h1 className="font-display text-2xl font-bold sm:text-3xl">
-            Hola{name ? `, ${name}` : ''} <span aria-hidden>👋</span>
-          </h1>
-          <p className="text-sm text-muted sm:text-base">
-            {pd.status === 'active' ? `Semana ${pd.week} de ${PROGRAM_WEEKS}` : pd.status === 'before' ? `Empiezas el ${formatLong(PROGRAM_START).toLowerCase()}` : 'Programa completado'} · Enfoque: Fuerza y Definición
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          <button type="button" onClick={() => setBellOpen(true)} className="relative grid h-11 w-11 place-items-center rounded-full bg-surface text-ink shadow-card" aria-label={`Avisos${alerts.length ? ` (${alerts.length})` : ''}`}>
-            <IconBell />
-            {alerts.length ? <span className="absolute right-2.5 top-2.5 h-2.5 w-2.5 rounded-full bg-danger ring-2 ring-surface" /> : null}
-          </button>
-          <a href="#/ajustes" className="grid h-11 w-11 place-items-center rounded-full bg-primary-soft font-display font-semibold text-primary" aria-label="Perfil y ajustes">
-            {name ? (
-              name[0].toUpperCase()
-            ) : (
-              <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
-                <circle cx="12" cy="8.5" r="4" />
-                <path d="M4 20c1.5-4 4.5-5.5 8-5.5s6.5 1.5 8 5.5z" />
-              </svg>
-            )}
-          </a>
-        </div>
-      </header>
-
-      {active ? <ActiveBanner session={active} /> : null}
-
-      <div className="grid gap-5 md:grid-cols-[1.35fr_1fr]">
-        <ObjectiveCard />
-        <OverallCard week={week} sessionsDone={completed.length} cardioMinutes={cardio.reduce((a, c) => a + c.minutes, 0)} />
-      </div>
-
-      {pd.status === 'active' && pd.dayKey === 'cardio' ? (
-        <Card aria-label="Cardio de hoy" className="flex flex-col gap-3 sm:flex-row sm:items-center">
-          <div className="grid h-14 w-14 shrink-0 place-items-center rounded-2xl bg-primary-soft text-primary">
-            <IconHeart size={28} />
-          </div>
-          <div className="flex-1">
-            <p className="font-display text-lg font-semibold">Hoy toca cardio</p>
-            <p className="text-sm text-muted">
-              {cw.minutes} de {cw.target} min esta semana (≈ {Math.round(cw.target / 2)} min hoy). Intensidad moderada: puedes hablar pero no cantar.
+    <>
+      {active ? (
+        <article className="panel alert-panel" aria-label="Sesión sin terminar">
+          <div>
+            <strong>Tienes una sesión sin terminar</strong>
+            <p className="muted" style={{ margin: '4px 0 0', fontSize: 12 }}>
+              {DAY_LABELS[active.dayKey]} · {sessionProgress(active).done}/{sessionProgress(active).total} series · guardada automáticamente
             </p>
           </div>
-          <Button onClick={() => setCardioOpen(true)}>Registrar cardio</Button>
-        </Card>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button type="button" className="btn btn-primary" onClick={() => navigate('/entrenamiento')}>
+              Reanudar <span aria-hidden>→</span>
+            </button>
+            <button type="button" className="btn btn-outline" onClick={() => setDiscardOpen(true)}>
+              Descartar
+            </button>
+          </div>
+        </article>
+      ) : null}
+      {reminder ? (
+        <article className="panel alert-panel" role="status">
+          <div>
+            <span className="eyebrow">Recordatorio</span>
+            <p style={{ margin: '4px 0 0' }}>{reminder}</p>
+          </div>
+          {pd.dayKey === 'cardio' ? (
+            <button type="button" className="btn btn-light" onClick={() => setCardioOpen(true)}>
+              Registrar cardio
+            </button>
+          ) : null}
+        </article>
       ) : null}
 
-      <div className="grid gap-5 md:grid-cols-[1.35fr_1fr]">
-        <NextWorkoutCard next={next} inventory={inventory} adjustments={adjustments} sessions={sessions} unit={settings.unit} />
-        <WeekCard week={week} active={pd.status === 'active'} today={t} doneKeys={doneThisWeek} cardioDates={new Set(cardio.map((c) => c.date))} onCardio={() => setCardioOpen(true)} cardio={cw} />
+      <div className="dashboard-grid">
+        <article className="hero">
+          <div className="hero-copy">
+            <span className="hero-eyebrow">TU OBJETIVO, A TU RITMO</span>
+            <h2>
+              Más fuerte.
+              <br />
+              <em>Más definida.</em>
+              <br />
+              Más tú.
+            </h2>
+            <p>4 días de fuerza, avances reales y un programa que se adapta a ti.</p>
+            <button type="button" className="btn btn-dark" onClick={() => navigate('/entrenamiento')}>
+              Empezar mi entrenamiento <span aria-hidden>↗</span>
+            </button>
+          </div>
+          <div className="hero-art" aria-hidden>
+            <div className="halo halo-one" />
+            <div className="halo halo-two" />
+            <HeroArt />
+          </div>
+        </article>
+
+        <article className="panel summary-panel">
+          <div className="panel-heading">
+            <h3>Tu progreso</h3>
+            <span className="tiny-label">Plan completo</span>
+          </div>
+          <div className="ring-and-desc">
+            <div
+              className="progress-ring"
+              style={{ background: `conic-gradient(var(--primary) ${pct}%, var(--primary-soft) 0)` }}
+              role="img"
+              aria-label={`${completed.length} sesiones completadas de ${totalPlanned} (${pct} %)`}
+            >
+              <div className="ring-content">
+                <b>{completed.length}</b>
+                <small>sesiones</small>
+              </div>
+            </div>
+            <div>
+              <strong>
+                13 semanas
+                <br />
+                para avanzar
+              </strong>
+              <p>No necesitas ser perfecta; solo constante.</p>
+            </div>
+          </div>
+          <div className="summary-foot">
+            <span>4 días de fuerza / semana</span>
+            <span>
+              {pct}% del plan <span className="violet-dot" style={{ display: 'inline-block', marginLeft: 6 }} />
+            </span>
+          </div>
+        </article>
+
+        <article className="panel next-panel">
+          <div className="panel-heading">
+            <h3>Tu siguiente entrenamiento</h3>
+            {next ? <span className="tiny-label purple">FUERZA {next.dayKey}</span> : null}
+          </div>
+          {next ? (
+            nextBody(next, sessions)
+          ) : (
+            <p className="muted" style={{ marginTop: 18 }}>
+              No quedan entrenos pendientes en el programa. Puedes repetir cualquier sesión desde Entrenar.
+            </p>
+          )}
+        </article>
+
+        <article className="panel week-panel">
+          <div className="panel-heading">
+            <h3>Esta semana</h3>
+            <span className="tiny-label">
+              {doneThisWeek.size}/4 · Tu constancia
+            </span>
+          </div>
+          <div className="week-dots">
+            {Array.from({ length: 7 }, (_, i) => {
+              const date = dateFor(week, i);
+              const k = programDayFor(date).dayKey;
+              const strength = isStrengthDay(k);
+              const done = strength ? doneThisWeek.has(k) : k === 'cardio' ? cardio.some((c) => c.date === date) : false;
+              const isToday = pd.status === 'active' && date === t;
+              return (
+                <div key={i} className={`week-day${strength ? ' strength' : ''}${done ? ' done' : ''}${isToday ? ' today' : ''}`}>
+                  <span>{SHORT[i]}</span>
+                  <span className="bubble" aria-label={`${DAY_LABELS[k]}${done ? ', hecho' : ''}${isToday ? ', hoy' : ''}`}>
+                    {done ? '✓' : strength ? '✦' : k === 'cardio' ? '·' : '–'}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
+          <div className="week-hint">
+            <span>Los días de fuerza tienen un punto morado.</span>
+            <button type="button" className="link-btn" onClick={() => setCardioOpen(true)}>
+              + Cardio {cw.minutes}/{cw.target} min
+            </button>
+          </div>
+        </article>
       </div>
 
-      <StatTiles measurements={measurements} profile={profile} sessions={sessions} />
+      <div className="section-heading">
+        <h2>Tu punto de partida</h2>
+        <p>Usamos tus medidas reales, no cifras inventadas.</p>
+      </div>
+      <div className="metric-grid">
+        <article className="metric">
+          <span className="metric-icon" aria-hidden>⚖</span>
+          <span className="metric-title">Peso actual</span>
+          <strong>
+            {weight} <small>lb</small>
+          </strong>
+          <span className="metric-caption">{delta(weight, profile.weightLb, 'lb') ?? `Meta final: ${profile.goalWeightLb} lb`}</span>
+        </article>
+        <article className="metric">
+          <span className="metric-icon" aria-hidden>◌</span>
+          <span className="metric-title">Cintura</span>
+          <strong>
+            {waist} <small>cm</small>
+          </strong>
+          <span className="metric-caption">{delta(waist, profile.waistCm, 'cm') ?? 'Progreso, sin presiones'}</span>
+        </article>
+        <article className="metric">
+          <span className="metric-icon" aria-hidden>♡</span>
+          <span className="metric-title">Cadera</span>
+          <strong>
+            {hip} <small>cm</small>
+          </strong>
+          <span className="metric-caption">{delta(hip, profile.hipCm, 'cm') ?? 'Referencia inicial'}</span>
+        </article>
+        <a className="metric" href="#/ajustes" style={{ textDecoration: 'none', color: 'inherit' }}>
+          <span className="metric-icon" aria-hidden>✳</span>
+          <span className="metric-title">Tu equipo</span>
+          <strong>
+            {pairs.length} <small>{pairs.length === 1 ? 'par' : 'pares'}</small>
+          </strong>
+          <span className="metric-caption">{pairs.length ? `${pairs.map((p) => p.value).join(', ').replace(/, ([^,]*)$/, ' y $1')} ${pairs[0].unit}` : 'Añade tus mancuernas'}</span>
+        </a>
+      </div>
 
-      <p className="text-xs leading-relaxed text-muted">
-        Esta app no sustituye el consejo médico. Con hígado graso u otra condición clínica, consulta con tu profesional de la salud y detente si aparece dolor, mareo o falta de aire. Los resultados no están garantizados.
+      <p className="privacy-note">
+        Weidry no sustituye el consejo médico. Con hígado graso u otra condición clínica, consulta con tu profesional de la salud y detente si aparece dolor, mareo o falta de aire. Los resultados no están garantizados.
       </p>
 
       <Modal open={cardioOpen} onClose={() => setCardioOpen(false)} title="Registrar cardio">
         <CardioLogger onSaved={() => setCardioOpen(false)} />
       </Modal>
-      <Modal open={bellOpen} onClose={() => setBellOpen(false)} title="Avisos">
-        {alerts.length === 0 ? (
-          <p className="text-muted">No tienes avisos pendientes. ¡Todo al día!</p>
-        ) : (
-          <ul className="flex flex-col gap-2">
-            {alerts.map((a) => (
-              <li key={a.text} className="flex items-center justify-between gap-3 rounded-2xl bg-surface-2 p-3">
-                <span className="text-sm">{a.text}</span>
-                {a.action ? (
-                  <Button
-                    size="sm"
-                    onClick={() => {
-                      setBellOpen(false);
-                      a.action!();
-                    }}
-                  >
-                    {a.actionLabel}
-                  </Button>
-                ) : null}
-              </li>
-            ))}
-          </ul>
-        )}
-        <a href="#/ajustes" className="mt-4 inline-block min-h-11 py-2 text-sm font-semibold text-primary">Configurar recordatorios →</a>
+      <Modal
+        open={discardOpen}
+        onClose={() => setDiscardOpen(false)}
+        title="¿Descartar la sesión?"
+        footer={
+          <div className="grid gap-2">
+            <button
+              type="button"
+              className="btn btn-danger"
+              onClick={async () => {
+                if (active) await discardSession(active.id);
+                setDiscardOpen(false);
+              }}
+            >
+              Sí, descartar
+            </button>
+            <button type="button" className="btn btn-light" onClick={() => setDiscardOpen(false)}>
+              Cancelar
+            </button>
+          </div>
+        }
+      >
+        <p>Si ya registraste series, se conservarán en el historial como sesión incompleta.</p>
       </Modal>
-    </div>
+    </>
   );
+
+  function nextBody(next: NonNullable<ReturnType<typeof nextStrength>>, sessions: WorkoutSession[]) {
+    const day = PLAN_DAYS[next.dayKey];
+    const dbs = day.slots
+      .map((slot) => proposedOption({ ex: getExercise(slot.exerciseId)!, slot, week: next.week, inventory: inventory!, adjustments: adjustments!, sessions, unit: settings!.unit }).option)
+      .filter((o) => o.kind === 'db')
+      .map((o) => o.lb);
+    const min = dbs.length ? Math.min(...dbs) : 0;
+    const max = dbs.length ? Math.max(...dbs) : 0;
+    const dow = (parseISODate(next.date).getDay() + 6) % 7;
+    return (
+      <div className="next-body">
+        <div className="workout-illustration">
+          <Img photo={PHOTOS[next.dayKey]} decorative />
+        </div>
+        <div>
+          <p className="eyebrow" style={{ margin: 0 }}>
+            {next.isToday ? 'HOY · ' : next.date === addDays(t, 1) ? 'MAÑANA · ' : ''}
+            {WEEKDAYS[dow]} · {formatShort(next.date).toUpperCase()}
+          </p>
+          <h4>{day.title}</h4>
+          <p className="muted">
+            {day.slots.length} ejercicios · {setsForWeek(next.week)} series · {isRecoveryWeek(next.week) ? '25–35' : '35–45'} min
+            {dbs.length ? ` · ${min === max ? `${min}` : `${min}–${max}`} lb` : ''}
+          </p>
+          <StartWorkoutButton date={next.isToday ? next.date : t} week={next.week} dayKey={next.dayKey} label="Comenzar" />
+        </div>
+      </div>
+    );
+  }
 }
 
 /** Próximo entreno de fuerza: hoy si aún no está hecho; si no, el siguiente día de fuerza del programa. */
@@ -154,278 +320,7 @@ function nextStrength(t: string, completed: WorkoutSession[]): { date: string; w
     const pd = programDayFor(date);
     if (pd.status === 'after') return null;
     if (pd.status !== 'active' || !isStrengthDay(pd.dayKey)) continue;
-    const done = completed.some((s) => s.week === pd.week && s.dayKey === pd.dayKey);
-    if (!done) return { date, week: pd.week!, dayKey: pd.dayKey, isToday: i === 0 };
+    if (!completed.some((s) => s.week === pd.week && s.dayKey === pd.dayKey)) return { date, week: pd.week!, dayKey: pd.dayKey, isToday: i === 0 };
   }
   return null;
-}
-
-function ObjectiveCard() {
-  return (
-    <section aria-labelledby="obj-title" className="relative min-h-48 overflow-hidden rounded-2xl bg-gradient-to-br from-[#f3edff] via-[#e6dbff] to-[#cbb8f7] p-6 text-[#1f2937] shadow-card dark:from-[#2a1d44] dark:via-[#30205a] dark:to-[#4c1d95] dark:text-white">
-      <div className="relative z-10 max-w-[60%]">
-        <p className="text-sm font-medium opacity-80">Tu objetivo</p>
-        <h2 id="obj-title" className="font-display text-2xl font-bold leading-tight sm:text-3xl">
-          Definición muscular
-        </h2>
-        <ul className="mt-3 flex flex-col gap-1.5 text-sm">
-          {['Ganar fuerza', 'Tonificar y definir', 'Desarrollar glúteos y piernas'].map((t) => (
-            <li key={t} className="flex items-center gap-2">
-              <span className="text-[#6d28d9] dark:text-[#c4b5fd]">
-                <IconCheck size={16} />
-              </span>
-              {t}
-            </li>
-          ))}
-        </ul>
-      </div>
-      <div className="absolute bottom-0 right-0 top-0 w-[46%]">
-        <Img photo={PHOTOS.objetivo} className="h-full w-full" />
-        <div className="absolute inset-y-0 left-0 w-1/2 bg-gradient-to-r from-[#e6dbff] via-[#e6dbff]/40 to-transparent dark:from-[#30205a] dark:via-[#30205a]/40" aria-hidden />
-      </div>
-    </section>
-  );
-}
-
-function OverallCard({ week, sessionsDone, cardioMinutes }: { week: number; sessionsDone: number; cardioMinutes: number }) {
-  const pct = Math.min(100, Math.round((sessionsDone / (PROGRAM_WEEKS * 4)) * 100));
-  const rows: [ReactNode, string][] = [
-    [<IconCalendar size={18} />, `Semana ${week} / ${PROGRAM_WEEKS}`],
-    [<IconDumbbell size={18} />, `${sessionsDone} entrenamiento${sessionsDone === 1 ? '' : 's'}`],
-    [<IconHeart size={18} />, `${cardioMinutes} min de cardio`],
-  ];
-  return (
-    <Card aria-labelledby="overall-title">
-      <h2 id="overall-title" className="mb-4 font-display text-lg font-semibold">Tu progreso general</h2>
-      <div className="flex items-center gap-5">
-        <ProgressRing value={pct / 100} size={112} stroke={11} label={`Programa completado al ${pct} por ciento`}>
-          <span className="font-display text-2xl font-bold">{pct}%</span>
-        </ProgressRing>
-        <ul className="flex flex-1 flex-col gap-2">
-          {rows.map(([icon, text]) => (
-            <li key={text} className="flex items-center gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
-              <span className="text-primary">{icon}</span>
-              {text}
-            </li>
-          ))}
-        </ul>
-      </div>
-    </Card>
-  );
-}
-
-function NextWorkoutCard({
-  next,
-  inventory,
-  adjustments,
-  sessions,
-  unit,
-}: {
-  next: ReturnType<typeof nextStrength>;
-  inventory: InventoryItem[];
-  adjustments: LoadAdjustment[];
-  sessions: WorkoutSession[];
-  unit: Unit;
-}) {
-  if (!next)
-    return (
-      <Card aria-label="Próximo entrenamiento">
-        <h2 className="mb-2 font-display text-lg font-semibold">Próximo entrenamiento</h2>
-        <p className="text-muted">No hay entrenos pendientes en el programa. Puedes repetir cualquier día desde Entrenamiento.</p>
-        <Button className="mt-3" variant="secondary" onClick={() => navigate('/entrenamiento')}>
-          Elegir entreno
-        </Button>
-      </Card>
-    );
-  const day = PLAN_DAYS[next.dayKey];
-  const dbs = day.slots
-    .map((slot) => proposedOption({ ex: getExercise(slot.exerciseId)!, slot, week: next.week, inventory, adjustments, sessions, unit }).option)
-    .filter((o) => o.kind === 'db')
-    .map((o) => o.lb);
-  const min = dbs.length ? Math.min(...dbs) : 0;
-  const max = dbs.length ? Math.max(...dbs) : 0;
-  const loads = dbs.length ? `Mancuernas: ${min === max ? formatWeight(min, unit) : `${formatWeight(min, unit).replace(` ${unit}`, '')}–${formatWeight(max, unit)}`}` : 'Peso corporal y alternativas ligeras';
-  const dow = (parseISODate(next.date).getDay() + 6) % 7;
-  return (
-    <Card aria-labelledby="next-title">
-      <h2 className="mb-4 font-display text-lg font-semibold">Próximo entrenamiento</h2>
-      <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
-        <div className="relative aspect-[4/3] w-full shrink-0 overflow-hidden rounded-2xl bg-primary-soft sm:w-44">
-          <Img photo={PHOTOS[next.dayKey]} className="h-full w-full" />
-        </div>
-        <div className="flex flex-1 flex-col gap-2">
-          <span className="w-fit rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">
-            {next.isToday ? 'Hoy' : next.date === addDays(today(), 1) ? 'Mañana' : 'Próximo'} · {WEEKDAYS[dow]}
-          </span>
-          <h3 id="next-title" className="font-display text-xl font-bold leading-tight">
-            {day.title}
-          </h3>
-          <p className="text-sm text-muted">
-            ~{35 + setsForWeek(next.week) * 5} min · {setsForWeek(next.week)} series · {loads}
-          </p>
-          <div className="mt-1 sm:max-w-56">
-            <StartWorkoutButton date={next.isToday ? next.date : today()} week={next.week} dayKey={next.dayKey} label="Comenzar" size="md" icon={<IconPlay size={18} />} />
-          </div>
-          {!next.isToday ? <p className="text-xs text-muted">Puedes adelantarlo; se registrará como el de la semana {next.week}.</p> : null}
-        </div>
-      </div>
-    </Card>
-  );
-}
-
-function WeekCard({
-  week,
-  active,
-  today: t,
-  doneKeys,
-  cardioDates,
-  onCardio,
-  cardio,
-}: {
-  week: number;
-  active: boolean;
-  today: string;
-  doneKeys: Set<string>;
-  cardioDates: Set<string>;
-  onCardio: () => void;
-  cardio: { minutes: number; target: number };
-}) {
-  return (
-    <Card aria-labelledby="week-title">
-      <div className="mb-4 flex items-baseline justify-between">
-        <h2 id="week-title" className="font-display text-lg font-semibold">Esta semana</h2>
-        <span className="text-sm font-semibold text-primary">
-          {doneKeys.size} / 4 <span className="font-normal text-muted">sesiones</span>
-        </span>
-      </div>
-      <ol className="grid grid-cols-7 gap-1">
-        {Array.from({ length: 7 }, (_, i) => {
-          const date = dateFor(week, i);
-          const k = programDayFor(date).dayKey;
-          const done = isStrengthDay(k) ? doneKeys.has(k) : k === 'cardio' ? cardioDates.has(date) : false;
-          const isToday = active && date === t;
-          return (
-            <li key={i} className="flex flex-col items-center gap-2">
-              <span className="text-xs font-semibold text-muted">{SHORT[i]}</span>
-              <span
-                className={`grid h-9 w-9 place-items-center rounded-full text-xs font-bold ${done ? 'bg-success text-white' : isToday ? 'border-2 border-primary text-primary' : 'bg-primary-soft text-primary/70'}`}
-                aria-label={`${WEEKDAYS[i]}: ${DAY_LABELS[k]}${done ? ', hecho' : ''}${isToday ? ', hoy' : ''}`}
-              >
-                {done ? <IconCheck size={16} /> : isToday ? SHORT[i] : k === 'cardio' ? '♥' : ''}
-              </span>
-            </li>
-          );
-        })}
-      </ol>
-      <div className="mt-4 flex items-center justify-between gap-2 rounded-xl bg-surface-2 px-3 py-2 text-sm">
-        <span>
-          Cardio: <strong className="tabular">{cardio.minutes}</strong> / {cardio.target} min
-        </span>
-        <button type="button" onClick={onCardio} className="min-h-10 font-semibold text-primary">
-          + Añadir
-        </button>
-      </div>
-      <a href="#/plan" className="mt-2 inline-block min-h-10 py-2 text-sm font-semibold text-primary">
-        Ver programa →
-      </a>
-    </Card>
-  );
-}
-
-function StatTiles({ measurements, profile, sessions }: { measurements: Measurement[]; profile: { weightLb: number; waistCm: number }; sessions: WorkoutSession[] }) {
-  const latest = (k: keyof Measurement) => [...measurements].reverse().find((m) => m[k] !== undefined)?.[k] as number | undefined;
-  const first = (k: keyof Measurement) => measurements.find((m) => m[k] !== undefined)?.[k] as number | undefined;
-  const tile = (k: 'weightLb' | 'waistCm' | 'hipCm', base?: number) => {
-    const cur = latest(k) ?? base;
-    const start = base ?? first(k);
-    return { cur, delta: cur !== undefined && start !== undefined ? Math.round((cur - start) * 10) / 10 : undefined };
-  };
-  const w = tile('weightLb', profile.weightLb);
-  const wa = tile('waistCm', profile.waistCm);
-  const hip = tile('hipCm');
-  const str = strengthChangePct(sessions);
-  return (
-    <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-      <Stat icon={<IconScale />} label="Peso" value={w.cur !== undefined ? `${w.cur} lb` : '—'} delta={w.delta} unit="lb" />
-      <Stat icon={<IconTape />} label="Cintura" value={wa.cur !== undefined ? `${wa.cur} cm` : '—'} delta={wa.delta} unit="cm" />
-      <Stat icon={<IconHip />} label="Cadera" value={hip.cur !== undefined ? `${hip.cur} cm` : '—'} delta={hip.delta} unit="cm" />
-      <Card className="flex flex-col gap-1" aria-label="Fuerza">
-        <div className="flex items-center gap-2 text-primary">
-          <IconFlex />
-          <span className="font-medium text-ink">Fuerza</span>
-        </div>
-        <p className={`font-display text-2xl font-bold ${str !== null && str > 0 ? 'text-success' : ''}`}>{str === null ? '—' : str === 0 ? '0%' : `${str > 0 ? '↑ +' : '↓ '}${str}%`}</p>
-        <p className="text-xs text-muted">{str === null ? 'Se calcula tras 2 sesiones' : 'vs. tus primeras sesiones (estimado)'}</p>
-      </Card>
-    </div>
-  );
-}
-
-function Stat({ icon, label, value, delta, unit }: { icon: ReactNode; label: string; value: string; delta?: number; unit: string }) {
-  return (
-    <Card className="flex flex-col gap-1" aria-label={label}>
-      <div className="flex items-center gap-2 text-primary">
-        {icon}
-        <span className="font-medium text-ink">{label}</span>
-      </div>
-      <p className="font-display text-2xl font-bold">{value}</p>
-      <p className="text-xs text-muted">
-        {value === '—' ? (
-          <a href="#/medidas" className="font-semibold text-primary">
-            Registrar
-          </a>
-        ) : delta === undefined || delta === 0 ? (
-          'Sin cambios'
-        ) : (
-          `${delta < 0 ? '▼' : '▲'} ${delta > 0 ? '+' : ''}${delta} ${unit}`
-        )}
-      </p>
-    </Card>
-  );
-}
-
-function ActiveBanner({ session }: { session: WorkoutSession }) {
-  const p = sessionProgress(session);
-  const [confirm, setConfirm] = useState(false);
-  return (
-    <Card className="border-primary/40 bg-primary-soft" aria-label="Sesión sin terminar">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-        <div className="flex-1">
-          <p className="font-display font-semibold">Tienes una sesión sin terminar</p>
-          <p className="text-sm text-muted">
-            {DAY_LABELS[session.dayKey]} · {p.done}/{p.total} series · se guardó automáticamente
-          </p>
-        </div>
-        <div className="flex gap-2">
-          <Button onClick={() => navigate(`/coach/${session.id}`)}>Reanudar</Button>
-          <Button variant="secondary" onClick={() => setConfirm(true)}>
-            Descartar
-          </Button>
-        </div>
-      </div>
-      <Modal
-        open={confirm}
-        onClose={() => setConfirm(false)}
-        title="¿Descartar la sesión?"
-        footer={
-          <div className="grid gap-2">
-            <Button
-              variant="danger"
-              onClick={async () => {
-                await discardSession(session.id);
-                setConfirm(false);
-              }}
-            >
-              Sí, descartar
-            </Button>
-            <Button variant="secondary" onClick={() => setConfirm(false)}>
-              Cancelar
-            </Button>
-          </div>
-        }
-      >
-        <p>Si ya registraste series, se conservarán en el historial como sesión incompleta.</p>
-      </Modal>
-    </Card>
-  );
 }

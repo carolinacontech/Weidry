@@ -24,7 +24,9 @@ export type Pattern =
   | 'lateralRaise'
   | 'kickback'
   | 'pushUp'
-  | 'abduction';
+  | 'abduction'
+  | 'overheadExt'
+  | 'ytRaise';
 
 export interface Alternative {
   id: string;
@@ -93,7 +95,7 @@ export const GUIDE: Record<string, ExerciseGuide> = {
   'reverse-lunge': {
     pattern: 'lunge',
     muscles: 'Glúteos, cuádriceps, estabilidad',
-    setup: ['De pie, pies a la anchura de caderas. Mancuernas a los lados (o sin peso).', 'Ten cerca una pared o silla si necesitas equilibrio.'],
+    setup: ['De pie, pies a la anchura de caderas. Sin peso o con una mancuerna sostenida al pecho (opcional).', 'Ten cerca una pared o silla si necesitas equilibrio.'],
     steps: ['Da un paso largo hacia atrás y baja la rodilla trasera hacia el suelo.', 'Mantén el torso erguido y el peso en la pierna delantera.', 'Empuja con el pie delantero para volver.'],
     cues: ['Paso largo y controlado', 'Rodilla delantera sobre el pie', 'Torso alto'],
     mistakes: ['Paso demasiado corto', 'Rodilla delantera que cae hacia dentro', 'Perder el equilibrio por ir rápido'],
@@ -334,6 +336,31 @@ export const GUIDE: Record<string, ExerciseGuide> = {
       { id: 'rdl-two-legs', name: 'Peso muerto rumano a dos piernas', why: 'Si el equilibrio limita.', mode: 'each' },
     ],
     caution: 'Si notas molestia en la espalda baja, reduce el recorrido o usa la versión a dos piernas.',
+  },
+  'triceps-extension': {
+    pattern: 'overheadExt',
+    muscles: 'Tríceps',
+    setup: ['De pie o sentada con la espalda apoyada.', 'Sostén UNA mancuerna con ambas manos por encima de la cabeza, brazos casi extendidos.'],
+    steps: ['Dobla los codos y baja la mancuerna por detrás de la cabeza.', 'Mantén los codos apuntando al frente y cerca de la cabeza.', 'Extiende los brazos hasta arriba sin bloquear de golpe.'],
+    cues: ['Codos quietos', 'Costillas abajo', 'Recorrido cómodo'],
+    mistakes: ['Abrir mucho los codos', 'Arquear la zona lumbar', 'Bajar más de lo que tolera el hombro'],
+    alternatives: [
+      { id: 'kickback-alt', name: 'Patada de tríceps con botellas', why: 'Menos exigencia para el hombro.', mode: 'each' },
+      { id: 'lying-ext', name: 'Extensión tumbada en el suelo', why: 'Más estable y controlada.', mode: 'held' },
+    ],
+    caution: 'Si sientes pinchazo en el hombro, reduce el recorrido o usa la alternativa.',
+  },
+  'yt-raise': {
+    pattern: 'ytRaise',
+    muscles: 'Espalda alta, trapecio medio e inferior, hombro posterior',
+    setup: ['Inclínate desde la cadera con la espalda neutra (o túmbate boca abajo en el suelo).', 'Brazos colgando, pulgares hacia arriba.'],
+    steps: ['Eleva los brazos en forma de Y (en diagonal hacia delante) hasta la altura de las orejas.', 'Baja con control y en la siguiente repetición eleva en forma de T (hacia los lados).', 'Alterna Y y T, sin peso.'],
+    cues: ['Hombros lejos de las orejas', 'Pulgares arriba', 'Lento'],
+    mistakes: ['Encoger el cuello', 'Usar impulso', 'Redondear la espalda'],
+    alternatives: [
+      { id: 'prone-yt', name: 'Y / T tumbada boca abajo', why: 'Más estable para la espalda baja.', mode: 'body' },
+      { id: 'band-pull-apart', name: 'Aperturas con banda', why: 'Si tienes una banda elástica.', mode: 'body' },
+    ],
   },
 };
 

@@ -6,19 +6,18 @@ import { cardioTargetForWeek, isRecoveryWeek, isStrengthDay, programDayFor, sets
 import { DayPlanList } from './DayPlanList';
 import { CardioLogger } from './CardioLogger';
 import { StartWorkoutButton } from './StartWorkout';
-import { ProgramOverview, ExerciseList, ProgressionRules } from './ProgramSections';
-import { Loading, Modal, Notice, PageHeader, Tabs } from './ui';
+import { Loading, Modal, Notice } from './ui';
 
 const SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
-export function CalendarView() {
+/** Calendario de las 13 semanas: estado de cada día y acceso para entrenar o registrar cardio. */
+export function WeeksCalendar() {
   const sessions = useSessions();
   const cardio = useCardio();
   const settings = useSettings();
   const inventory = useInventory();
   const adjustments = useAdjustments();
   const [selected, setSelected] = useState<ProgramDay | null>(null);
-  const [view, setView] = useState<'overview' | 'cal' | 'exercises' | 'progress'>('overview');
 
   if (!sessions || !cardio || !settings || !inventory || !adjustments) return <Loading />;
   const t = today();
@@ -26,24 +25,7 @@ export function CalendarView() {
 
   return (
     <div>
-      <PageHeader title="Programa de 13 semanas" subtitle="Fuerza · Definición · Progresión de cargas" />
-      <div className="mb-5">
-        <Tabs
-          label="Vista del programa"
-          value={view}
-          onChange={setView}
-          tabs={[
-            ['overview', 'Vista general'],
-            ['cal', 'Por semanas'],
-            ['exercises', 'Ejercicios'],
-            ['progress', 'Progresión'],
-          ]}
-        />
-      </div>
-      {view === 'overview' ? <ProgramOverview currentWeek={currentWeek} /> : null}
-      {view === 'exercises' ? <ExerciseList /> : null}
-      {view === 'progress' ? <ProgressionRules /> : null}
-      <div hidden={view !== 'cal'}>
+      <div>
       <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted" aria-label="Leyenda">
         <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full bg-success" /> Hecho</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full border-2 border-dashed border-accent" /> Pendiente pasado</span>
@@ -106,7 +88,7 @@ export function CalendarView() {
             </p>
             {isRecoveryWeek(selected.week) ? <Notice>Semana de recuperación: menos series y cargas más ligeras.</Notice> : null}
             <DayPlanList dayKey={selected.dayKey} week={selected.week} inventory={inventory} adjustments={adjustments} sessions={sessions} unit={settings.unit} />
-            <StartWorkoutButton date={selected.date > t ? t : selected.date} week={selected.week} dayKey={selected.dayKey} label="Hacer este entreno ahora" size="lg" />
+            <StartWorkoutButton date={selected.date > t ? t : selected.date} week={selected.week} dayKey={selected.dayKey} label="Hacer este entreno ahora" className="btn btn-primary btn-block" />
             <p className="text-xs text-muted">Se registrará como el entreno {selected.dayKey} de la semana {selected.week}.</p>
           </div>
         ) : selected?.dayKey === 'cardio' ? (

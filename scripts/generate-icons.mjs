@@ -20,7 +20,7 @@ for (const t of targets) {
   const svgSized = svg.replace('<svg ', `<svg width="${inner}" height="${inner}" `).replace(t.square ? 'rx="112"' : '__', t.square ? 'rx="0"' : '__');
   await page.setViewportSize({ width: t.size, height: t.size });
   await page.setContent(
-    `<html><body style="margin:0;display:grid;place-items:center;width:${t.size}px;height:${t.size}px;background:${t.square ? '#6D28D9' : 'transparent'}">${svgSized}</body></html>`,
+    `<html><body style="margin:0;display:grid;place-items:center;width:${t.size}px;height:${t.size}px;background:${t.square ? '#5b2fa8' : 'transparent'}">${svgSized}</body></html>`,
   );
   await page.screenshot({ path: new URL(`../public/icons/${t.file}`, import.meta.url).pathname, omitBackground: !t.square });
 }

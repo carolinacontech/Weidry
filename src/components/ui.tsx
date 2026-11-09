@@ -3,9 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-primary text-on-primary hover:bg-primary-600 active:scale-[0.98] shadow-[0_6px_16px_rgba(109,40,217,0.25)]',
-  secondary: 'bg-surface text-primary border border-primary/40 hover:bg-primary-soft active:scale-[0.98]',
-  soft: 'bg-primary-soft text-ink hover:brightness-95 active:scale-[0.98]',
+  primary: 'bg-gradient-to-r from-[#7541d0] to-[#6029b4] text-white hover:brightness-105 active:scale-[0.98] shadow-[0_8px_15px_#6e39b722]',
+  secondary: 'bg-surface text-accent border border-[#d7c4ed] hover:bg-accent-soft active:scale-[0.98]',
+  soft: 'bg-accent-soft text-accent hover:brightness-95 active:scale-[0.98]',
   ghost: 'bg-transparent text-ink hover:bg-surface-2',
   danger: 'bg-danger-soft text-danger border border-danger/30 hover:brightness-95 active:scale-[0.98]',
 };
@@ -18,11 +18,11 @@ export function Button({
   children,
   ...rest
 }: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; size?: 'sm' | 'md' | 'lg' | 'xl'; loading?: boolean }) {
-  const sizes = { sm: 'min-h-10 px-3 text-sm', md: 'min-h-12 px-4 text-base', lg: 'min-h-14 px-5 text-lg', xl: 'min-h-16 px-6 text-xl' };
+  const sizes = { sm: 'min-h-10 px-3 text-xs', md: 'min-h-11 px-4 text-sm', lg: 'min-h-12 px-5 text-sm', xl: 'min-h-14 px-6 text-base' };
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-sans font-extrabold transition disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${className}`}
       aria-busy={loading || undefined}
       {...rest}
       disabled={rest.disabled || loading}
@@ -53,7 +53,7 @@ export function Loading({ label = 'Cargando…' }: { label?: string }) {
 
 export function Card({ children, className = '', as: As = 'section', ...rest }: { children: ReactNode; className?: string; as?: 'section' | 'div' | 'article'; 'aria-labelledby'?: string; 'aria-label'?: string }) {
   return (
-    <As className={`rounded-2xl border border-line/70 bg-surface p-5 shadow-card ${className}`} {...rest}>
+    <As className={`panel ${className}`} {...rest}>
       {children}
     </As>
   );
@@ -61,10 +61,10 @@ export function Card({ children, className = '', as: As = 'section', ...rest }: 
 
 export function PageHeader({ title, subtitle, action }: { title: string; subtitle?: ReactNode; action?: ReactNode }) {
   return (
-    <header className="mb-4 flex items-end justify-between gap-3">
+    <header className="section-heading top-section flex items-end justify-between gap-3">
       <div>
-        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
-        {subtitle ? <p className="mt-1 text-muted">{subtitle}</p> : null}
+        <h2>{title}</h2>
+        {subtitle ? <p>{subtitle}</p> : null}
       </div>
       {action}
     </header>
@@ -77,7 +77,7 @@ export function Chip({ selected, children, onClick, className = '', ...rest }: {
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`min-h-11 rounded-full border px-4 text-sm font-semibold transition ${selected ? 'border-primary bg-primary text-on-primary' : 'border-line bg-surface text-ink hover:bg-primary-soft'} disabled:opacity-50 ${className}`}
+      className={`min-h-10 rounded-full border px-4 text-xs font-bold transition ${selected ? 'border-primary bg-primary text-on-primary' : 'border-[#ddd0eb] bg-surface text-accent hover:bg-accent-soft'} disabled:opacity-50 ${className}`}
       {...rest}
     >
       {children}
@@ -261,7 +261,7 @@ export function Field({ label, children, hint }: { label: string; children: (id:
   );
 }
 
-export const inputClass = 'min-h-12 w-full rounded-2xl border border-line bg-surface px-4 text-base text-ink placeholder:text-muted/70 focus:border-primary';
+export const inputClass = 'min-h-11 w-full rounded-[10px] border border-line bg-surface px-3 text-base text-ink placeholder:text-muted/70 focus:border-primary';
 
 /** Pestañas tipo "segmento" (contenedor lavanda, pestaña activa morada). */
 export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: [T, string][]; value: T; onChange: (v: T) => void; label: string }) {

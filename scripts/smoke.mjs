@@ -1,6 +1,7 @@
 // Prueba de humo de punta a punta en un iPhone emulado (Playwright).
-// Uso: npm run build && npx astro preview --port 4321 & node scripts/smoke.mjs
+// Uso: npm run build && npm run preview &  →  npm run smoke
 import { createRequire } from 'node:module';
+import { readFile } from 'node:fs/promises';
 const require = createRequire(import.meta.url);
 const { chromium, devices } = require('playwright');
 
@@ -13,106 +14,99 @@ const errors = [];
 page.on('pageerror', (e) => errors.push(e.message));
 page.on('console', (m) => m.type() === 'error' && errors.push(m.text()));
 const shot = (n) => page.screenshot({ path: `${OUT}/${n}.png` });
+const rir2 = () => page.getByRole('button', { name: /^2 repeticiones en reserva/ }).click();
+const complete = () => page.getByRole('button', { name: '✓ Completar serie' }).click();
+const skipRest = () => page.getByRole('button', { name: 'Saltar descanso →' }).click();
+const menu = async (item) => {
+  await page.getByRole('button', { name: 'Más opciones' }).click();
+  await page.getByRole('button', { name: item }).click();
+};
 
+// Bienvenida
 await page.goto(BASE);
 await page.getByRole('button', { name: 'Continuar' }).click();
 await page.getByRole('checkbox').check();
 await page.getByRole('button', { name: 'Continuar' }).click();
+await page.getByPlaceholder('Tu nombre').fill('Laura');
 await page.getByRole('button', { name: 'Empezar' }).click();
-await page.getByRole('heading', { name: /Hola/ }).waitFor();
-await page.getByText('Próximo entrenamiento').waitFor();
-await shot('01-dashboard');
+await page.getByRole('heading', { name: /Hola, Laura/ }).waitFor();
+await page.getByText('Tu siguiente entrenamiento').waitFor();
+await shot('01-inicio');
 
-await page.getByRole('button', { name: 'Comenzar' }).first().click();
-await page.getByText('Calentamiento').first().waitFor();
-await shot('02-warmup');
-await page.getByRole('button', { name: /Listo, empezar/ }).click();
-const rir2 = () => page.getByRole('button', { name: /^2 repeticiones en reserva/ }).click();
-await page.getByRole('heading', { name: 'Hip thrust / puente de glúteo con mancuerna' }).waitFor();
-await page.getByText('15 lb total · 1 mancuerna con ambas manos').first().waitFor();
-await rir2();
-await shot('03-coach');
-await page.getByRole('button', { name: /Completar serie/ }).click();
-await page.getByRole('button', { name: 'Saltar descanso →' }).waitFor();
-await shot('04-rest');
-await page.getByRole('button', { name: 'Saltar descanso →' }).click();
-await rir2();
-await page.getByRole('button', { name: /Completar serie/ }).click();
-// Tras 2 series (semana 1) pasa al siguiente ejercicio
-await page.getByRole('button', { name: 'Saltar descanso →' }).click();
+// Sesión 1: Comenzar desde Inicio
+await page.getByRole('button', { name: /Comenzar/ }).first().click();
+await page.getByRole('heading', { name: 'Piernas & glúteos A' }).waitFor();
 await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
-await page.getByRole('button', { name: 'Más opciones' }).click();
-await page.getByRole('button', { name: /Omitir ejercicio/ }).click();
+await page.getByText('10 lb total · 1 mancuerna con ambas manos').first().waitFor();
+await rir2();
+await shot('02-entrenar');
+await complete();
+await page.getByRole('button', { name: 'Pausar descanso' }).waitFor();
+await shot('03-descanso');
+await skipRest();
+await rir2();
+await complete();
+await skipRest();
 await page.getByRole('heading', { name: 'Peso muerto rumano' }).waitFor();
 await page.getByText('10 lb por mano · 20 lb total').first().waitFor();
-// Sustituir
-await page.getByRole('button', { name: 'Más opciones' }).click();
-await page.getByRole('button', { name: /Sustituir ejercicio/ }).click();
+// Sustituir y omitir
+await menu(/Sustituir ejercicio/);
 await page.getByRole('button', { name: /Bisagra de cadera/ }).click();
 await page.getByRole('heading', { name: /Bisagra de cadera/ }).waitFor();
-// Omitir
-await page.getByRole('button', { name: 'Más opciones' }).click();
-await page.getByRole('button', { name: /Omitir ejercicio/ }).click();
-await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
-// Pausa y reanudar
-await page.getByRole('button', { name: 'Más opciones' }).click();
-await page.getByRole('button', { name: /Pausar sesión/ }).click();
+await menu(/Omitir ejercicio/);
+await page.getByRole('heading', { name: 'Puente de glúteos' }).waitFor();
+// Pausa y recuperación tras recargar
+await menu(/Pausar sesión/);
 await page.getByRole('heading', { name: 'En pausa' }).waitFor();
 await page.getByRole('button', { name: /Reanudar/ }).click();
 await page.getByRole('heading', { name: 'En pausa' }).waitFor({ state: 'hidden' });
-await page.waitForTimeout(300); // deja terminar la escritura en IndexedDB
-// Recuperación de sesión interrumpida: recargar
+await page.waitForTimeout(300);
 await page.reload();
-await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
+await page.getByRole('heading', { name: 'Puente de glúteos' }).waitFor();
 // Terminar
-await page.getByRole('button', { name: 'Terminar sesión', exact: true }).click();
+await menu('Terminar sesión');
 await page.getByRole('heading', { name: 'Resumen' }).waitFor();
-await shot('05-summary');
+await shot('04-resumen');
 await page.getByRole('button', { name: 'Guardar y terminar' }).click();
-await page.getByText(/Mañana · Martes/).waitFor();
+await page.getByText(/MAÑANA · MARTES/).waitFor();
 
-// --- Segunda sesión: dos sesiones "fáciles" → sugerencia de subida que requiere aprobación
+// Sesión 2: dos sesiones con 2 RIR → sugerencia de subir (requiere aprobación)
 await page.goto(`${BASE}/#/entrenamiento`);
-await page.getByRole('button', { name: 'Repetir entrenamiento' }).click();
-await page.getByRole('button', { name: /Listo, empezar/ }).click();
-await page.getByRole('heading', { name: 'Hip thrust / puente de glúteo con mancuerna' }).waitFor();
+await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
 for (let i = 0; i < 2; i++) {
   await rir2();
-  await page.getByRole('button', { name: /Completar serie/ }).click();
-  await page.getByRole('button', { name: 'Saltar descanso →' }).click();
+  await complete();
+  await skipRest();
 }
-await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
-// Dolor → indicación de parar
+await page.getByRole('heading', { name: 'Peso muerto rumano' }).waitFor();
 await page.getByRole('switch', { name: 'Sentí dolor o molestia' }).click();
-await page.getByRole('button', { name: 'Registrar y parar' }).click();
+await complete();
 await page.getByRole('heading', { name: 'Detén el ejercicio' }).waitFor();
-await shot('13-dolor');
+await shot('05-dolor');
 await page.getByRole('button', { name: 'Terminar la sesión' }).click();
 await page.getByRole('heading', { name: 'Resumen' }).waitFor();
-await page.getByRole('button', { name: /Aprobar 20 lb total/ }).waitFor();
-await shot('14-sugerencia');
-await page.getByRole('button', { name: /Aprobar 20 lb total/ }).click();
-await page.getByText('Próxima propuesta: 20 lb total').waitFor();
+await page.getByRole('button', { name: /Aprobar 15 lb total/ }).waitFor();
+await shot('06-sugerencia');
+await page.getByRole('button', { name: /Aprobar 15 lb total/ }).click();
+await page.getByText('Próxima propuesta: 15 lb total').waitFor();
 await page.getByRole('button', { name: 'Guardar y terminar' }).click();
-await page.goto(`${BASE}/#/entrenamiento`);
-await page.getByText('20 lb total · 1 mancuerna con ambas manos').first().waitFor(); // la propuesta aprobada se refleja en el plan
-await page.goto(`${BASE}/#/`);
+await page.goto(`${BASE}/#/plan`);
+await page.getByText(/Sentadilla goblet · 2 × 10–12 · 15 lb total/).first().waitFor(); // la propuesta aprobada se refleja en el programa
 
 // Cardio desde Inicio
-await page.getByRole('button', { name: '+ Añadir' }).click();
+await page.goto(`${BASE}/#/`);
+await page.getByRole('button', { name: /\+ Cardio/ }).click();
 await page.getByRole('button', { name: 'Guardar cardio' }).click();
-await page.getByText('30', { exact: true }).first().waitFor();
+await page.getByText('+30 min de cardio guardados').waitFor();
 
 // Medidas
 await page.goto(`${BASE}/#/progreso`);
-await page.getByRole('tab', { name: 'Medidas' }).click();
-await page.getByRole('button', { name: /Registrar medidas/ }).click();
 await page.getByLabel('Peso (lb)').fill('147');
 await page.getByLabel('Cintura (cm)').fill('82.5');
-await page.getByRole('button', { name: 'Guardar', exact: true }).click();
+await page.getByRole('button', { name: 'Guardar medidas' }).click();
 await page.getByText('Medidas guardadas').waitFor();
 
-// Inventario: añadir 2 lb
+// Equipamiento: añadir una alternativa ligera
 await page.goto(`${BASE}/#/ajustes`);
 await page.getByLabel('Nombre', { exact: true }).fill('Botella 2 L');
 await page.getByLabel('Peso (lb)').fill('4.4');
@@ -121,34 +115,26 @@ await page.getByText('Botella 2 L añadida').waitFor();
 
 // Exportación JSON
 const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Exportar copia completa/ }).click()]);
-const backup = JSON.parse(await (await import('node:fs/promises')).readFile(await download.path(), 'utf8'));
-if (backup.data.sessions.length !== 2 || backup.data.adjustments.length !== 1 || backup.data.cardio.length !== 1) {
+const backup = JSON.parse(await readFile(await download.path(), 'utf8'));
+if (backup.data.sessions.length !== 2 || backup.data.adjustments.length !== 1 || backup.data.cardio.length !== 1 || backup.data.measurements.length !== 1) {
   throw new Error('La copia exportada no tiene los datos esperados: ' + JSON.stringify(Object.fromEntries(Object.entries(backup.data).map(([k, v]) => [k, v.length]))));
 }
 
-await page.goto(`${BASE}/#/plan`);
-await page.getByRole('tab', { name: 'Progresión' }).click();
-await page.waitForTimeout(300);
-await shot('15-tabla');
-
-for (const [hash, name] of [['/plan', '06-plan'], ['/progreso', '07-progreso'], ['/guia', '08-guia'], ['/guia/romanian-deadlift', '09-guia-detalle'], ['/ajustes', '10-ajustes'], ['/historial', '11-historial']]) {
+for (const [hash, name] of [['/', '07-inicio-datos'], ['/plan', '08-programa'], ['/progreso', '09-progreso'], ['/entrenamiento', '10-entrenar'], ['/ajustes', '11-ajustes'], ['/historial', '12-historial'], ['/guia', '13-tecnica']]) {
   await page.goto(`${BASE}/#${hash}`);
   await page.waitForTimeout(400);
   await shot(name);
 }
-// Escritorio: menú lateral
 await page.setViewportSize({ width: 1440, height: 1000 });
-for (const [hash, name] of [['/', '20-desk-inicio'], ['/plan', '21-desk-programa'], ['/progreso', '22-desk-progreso'], ['/entrenamiento', '23-desk-entreno']]) {
+for (const [hash, name] of [['/', '20-desk-inicio'], ['/entrenamiento', '21-desk-entrenar'], ['/plan', '22-desk-programa'], ['/progreso', '23-desk-progreso']]) {
   await page.goto(`${BASE}/#${hash}`);
   await page.waitForTimeout(500);
   await shot(name);
 }
-await page.setViewportSize({ width: 390, height: 664 });
-// Modo oscuro
 await page.emulateMedia({ colorScheme: 'dark' });
 await page.goto(`${BASE}/#/`);
 await page.waitForTimeout(400);
-await shot('12-dark');
+await shot('24-desk-oscuro');
 
 await browser.close();
 if (errors.length) {

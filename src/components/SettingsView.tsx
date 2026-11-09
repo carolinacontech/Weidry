@@ -153,6 +153,7 @@ function ProfileSection({ profile }: { profile: Profile }) {
         <Field label="Peso inicial (lb)">{(id) => <input id={id} className={inputClass} type="number" inputMode="decimal" value={p.weightLb} onChange={num('weightLb')} />}</Field>
         <Field label="Peso objetivo (lb)">{(id) => <input id={id} className={inputClass} type="number" inputMode="decimal" value={p.goalWeightLb} onChange={num('goalWeightLb')} />}</Field>
         <Field label="Cintura inicial (cm)">{(id) => <input id={id} className={inputClass} type="number" inputMode="decimal" value={p.waistCm} onChange={num('waistCm')} />}</Field>
+        <Field label="Cadera inicial (cm)">{(id) => <input id={id} className={inputClass} type="number" inputMode="decimal" value={p.hipCm} onChange={num('hipCm')} />}</Field>
         <Field label="Referencia estética cintura (cm)" hint="No es predicción ni meta médica">
           {(id) => <input id={id} className={inputClass} type="number" inputMode="decimal" value={p.aestheticWaistCm} onChange={num('aestheticWaistCm')} />}
         </Field>

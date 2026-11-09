@@ -1,108 +1,63 @@
 import { useEffect, type ReactNode } from 'react';
-import { DAY_LABELS } from '../data/plan';
-import { useSettings } from '../hooks/useData';
+import { DAY_LABELS, PROGRAM_WEEKS } from '../data/plan';
+import { useProfile, useSettings } from '../hooks/useData';
 import { useRoute } from '../hooks/useRoute';
 import { db, getActiveSession, getSettings, requestPersistentStorage, updateSettings } from '../lib/db';
 import { today } from '../lib/dates';
 import { showLocalNotification } from '../lib/platform';
 import { isStrengthDay, programDayFor } from '../lib/program';
-import { CalendarView } from './CalendarView';
-import { CoachMode } from './CoachMode';
-import { Dashboard } from './Dashboard';
 import { GuideView } from './GuideView';
 import { HistoryView } from './HistoryView';
+import { Dashboard } from './Dashboard';
 import { Onboarding } from './Onboarding';
+import { ProgramView } from './ProgramView';
 import { ProgressView } from './ProgressView';
 import { SettingsView, applyTheme } from './SettingsView';
-import { IconBook, IconCalendar, IconChart, IconDumbbell, IconHistory, IconHome, IconSettings, IconTape, Logo } from './icons';
-import { TrainingView } from './TrainingView';
+import { TrainView } from './TrainView';
 import { Loading, ToastProvider } from './ui';
 
 interface NavItem {
   path: string;
   label: string;
-  short?: string;
-  Icon: (p: { size?: number }) => ReactNode;
-  mobile?: boolean;
+  mobileLabel: string;
+  glyph: string;
 }
 
-const NAV: NavItem[] = [
-  { path: '/', label: 'Inicio', Icon: IconHome, mobile: true },
-  { path: '/entrenamiento', label: 'Entrenamiento', short: 'Entreno', Icon: IconDumbbell, mobile: true },
-  { path: '/plan', label: 'Programa (13 semanas)', short: 'Programa', Icon: IconCalendar, mobile: true },
-  { path: '/progreso', label: 'Progreso', Icon: IconChart, mobile: true },
-  { path: '/medidas', label: 'Medidas', Icon: IconTape },
-  { path: '/historial', label: 'Historial', Icon: IconHistory },
-  { path: '/guia', label: 'Ejercicios', Icon: IconBook },
-  { path: '/ajustes', label: 'Ajustes', Icon: IconSettings, mobile: true },
+/** Navegación principal del prototipo. */
+const MAIN_NAV: NavItem[] = [
+  { path: '/', label: 'Inicio', mobileLabel: 'Inicio', glyph: '⌂' },
+  { path: '/entrenamiento', label: 'Entrenar', mobileLabel: 'Entrenar', glyph: '◈' },
+  { path: '/plan', label: 'Mi programa', mobileLabel: 'Programa', glyph: '▦' },
+  { path: '/progreso', label: 'Progreso', mobileLabel: 'Progreso', glyph: '↗' },
 ];
 
-function activePath(route: string): string {
+/** Secciones adicionales de la app completa (mismo estilo, menú secundario). */
+const MORE_NAV: NavItem[] = [
+  { path: '/historial', label: 'Historial', mobileLabel: 'Historial', glyph: '◷' },
+  { path: '/guia', label: 'Técnica', mobileLabel: 'Técnica', glyph: '✎' },
+  { path: '/ajustes', label: 'Ajustes', mobileLabel: 'Ajustes', glyph: '⚙' },
+];
+
+function sectionOf(route: string): string {
+  if (route.startsWith('/coach') || route === '/entrenamiento') return '/entrenamiento';
   if (route.startsWith('/guia')) return '/guia';
-  if (route.startsWith('/coach')) return '/entrenamiento';
-  const hit = NAV.find((n) => n.path === route);
-  return hit ? hit.path : '/';
+  if (route === '/medidas') return '/progreso';
+  return [...MAIN_NAV, ...MORE_NAV].some((n) => n.path === route) ? route : '/';
 }
 
-function Sidebar({ route }: { route: string }) {
-  const active = activePath(route);
-  return (
-    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden bg-gradient-to-b from-[var(--sidebar-from)] to-[var(--sidebar-to)] text-white lg:flex" aria-label="Menú principal">
-      <a href="#/" className="flex items-center gap-2 px-6 pb-6 pt-7 font-display text-xl font-bold">
-        <span className="text-[#c4b5fd]"><Logo /></span>
-        Weidry
-      </a>
-      <nav className="flex-1 px-3">
-        <ul className="flex flex-col gap-1">
-          {NAV.map(({ path, label, Icon }) => {
-            const on = active === path;
-            return (
-              <li key={path}>
-                <a
-                  href={`#${path}`}
-                  aria-current={on ? 'page' : undefined}
-                  className={`flex min-h-11 items-center gap-3 rounded-xl px-4 font-medium transition ${on ? 'bg-[#a78bfa] text-white shadow-lg' : 'text-white/85 hover:bg-white/10'}`}
-                >
-                  <Icon size={20} />
-                  {label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
-      {/* Ondas decorativas */}
-      <svg viewBox="0 0 256 140" className="pointer-events-none mt-auto w-full opacity-60" aria-hidden>
-        <path d="M0 60 C60 20 120 100 256 50 V140 H0z" fill="#7c3aed" opacity="0.45" />
-        <path d="M0 95 C80 60 150 130 256 85 V140 H0z" fill="#a78bfa" opacity="0.35" />
-      </svg>
-    </aside>
-  );
-}
+const HEADINGS: Record<string, string> = {
+  '/entrenamiento': 'Tu entrenamiento',
+  '/plan': 'Un plan para ti',
+  '/progreso': 'Cada avance cuenta',
+  '/historial': 'Tu historial',
+  '/guia': 'Técnica sin prisa',
+  '/ajustes': 'Tu espacio',
+};
 
-function BottomNav({ route }: { route: string }) {
-  const active = activePath(route);
-  const items = NAV.filter((n) => n.mobile);
-  const mapped = ['/medidas', '/historial'].includes(active) ? '/progreso' : active === '/guia' ? '/entrenamiento' : active;
-  return (
-    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden" aria-label="Navegación principal">
-      <ul className="mx-auto grid max-w-xl grid-cols-5">
-        {items.map(({ path, label, short, Icon }) => {
-          const on = mapped === path;
-          return (
-            <li key={path}>
-              <a href={`#${path}`} aria-current={on ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 pt-2 text-[11px] font-semibold ${on ? 'text-primary' : 'text-muted'}`}>
-                <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-primary-soft' : ''}`}>
-                  <Icon size={21} />
-                </span>
-                {short ?? label}
-              </a>
-            </li>
-          );
-        })}
-      </ul>
-    </nav>
-  );
+function initials(name: string): string {
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (!parts.length) return 'W';
+  return (parts[0][0] + (parts[1]?.[0] ?? '')).toUpperCase();
 }
 
 /** Muestra una notificación local si el entreno de hoy está pendiente después de la hora elegida. */
@@ -134,6 +89,7 @@ async function maybeNotify() {
 function Shell() {
   const route = useRoute();
   const settings = useSettings();
+  const profile = useProfile();
 
   useEffect(() => {
     void requestPersistentStorage();
@@ -158,39 +114,96 @@ function Shell() {
     return () => m.removeEventListener('change', on);
   }, [settings?.theme]);
 
-  if (!settings) return <Loading label="Abriendo Weidry…" />;
+  if (!settings || !profile) return <Loading label="Abriendo Weidry…" />;
   if (!settings.onboarded) return <Onboarding />;
 
-  const coach = route.match(/^\/coach\/(.+)$/);
+  const section = sectionOf(route);
   const guide = route.match(/^\/guia\/(.+)$/);
   let page: ReactNode;
-  if (coach) page = null;
-  else if (route === '/entrenamiento') page = <TrainingView />;
-  else if (route === '/plan') page = <CalendarView />;
+  if (section === '/entrenamiento') page = <TrainView />;
+  else if (route === '/plan') page = <ProgramView />;
   else if (route === '/progreso') page = <ProgressView />;
   else if (route === '/medidas') page = <ProgressView initialTab="medidas" />;
-  else if (route === '/historial') page = <HistoryView />;
+  else if (route === '/historial') page = <HistoryView embedded />;
   else if (route === '/ajustes') page = <SettingsView />;
   else if (route === '/guia') page = <GuideView />;
   else if (guide) page = <GuideView exerciseId={decodeURIComponent(guide[1])} />;
   else page = <Dashboard />;
 
+  const name = profile.name?.trim() ?? '';
+  const pd = programDayFor(today());
+  const week = pd.week ?? (pd.status === 'before' ? 1 : PROGRAM_WEEKS);
+  const heading = section === '/' ? `Hola, ${name || 'campeona'}` : HEADINGS[section] ?? 'Weidry';
+  const navLink = (n: NavItem, small?: boolean) => (
+    <a key={n.path} href={`#${n.path}`} className={`nav-link${small ? ' small' : ''}${section === n.path ? ' active' : ''}`} aria-current={section === n.path ? 'page' : undefined}>
+      <span className="ico" aria-hidden>
+        {n.glyph}
+      </span>
+      <span>{n.label}</span>
+    </a>
+  );
+
   return (
-    <div className="min-h-dvh">
+    <div className="app-shell">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-xl focus:bg-surface focus:p-3">
         Saltar al contenido
       </a>
-      <Sidebar route={route} />
-      {coach ? (
-        <CoachMode sessionId={decodeURIComponent(coach[1])} />
-      ) : (
-        <main id="main" className="safe-top mx-auto max-w-xl px-4 pb-32 lg:ml-64 lg:max-w-none lg:px-8 lg:pb-12 lg:pt-8">
-          <div key={route} className="animate-in mx-auto max-w-6xl">
-            {page}
+      <aside className="sidebar" aria-label="Navegación principal">
+        <a className="brand" href="#/">
+          <span className="brand-mark" aria-hidden>
+            ✦
+          </span>
+          <span>
+            Wei<span className="brand-accent">dry</span>
+          </span>
+        </a>
+        <p className="sidebar-kicker">MI ESTUDIO</p>
+        <nav className="side-menu">{MAIN_NAV.map((n) => navLink(n))}</nav>
+        <p className="sidebar-kicker second">MÁS</p>
+        <nav className="side-menu" aria-label="Más secciones">
+          {MORE_NAV.map((n) => navLink(n, true))}
+        </nav>
+        <a className="side-bottom" href="#/ajustes">
+          <span className="avatar" aria-hidden>
+            {initials(name)}
+          </span>
+          <span>
+            <strong>{name || 'Tu espacio'}</strong>
+            <small>Plan de 13 semanas</small>
+          </span>
+        </a>
+      </aside>
+
+      <main id="main" className="main-content">
+        <header className="topbar">
+          <div>
+            <span className="eyebrow">Tu espacio de fuerza</span>
+            <h1>
+              {heading} <span aria-hidden>✳</span>
+            </h1>
           </div>
-        </main>
-      )}
-      {coach ? null : <BottomNav route={route} />}
+          <div className="header-actions">
+            <span className="day-pill">
+              {pd.status === 'before' ? 'Empieza el 9 nov' : pd.status === 'after' ? 'Programa completado' : `Semana ${week} de ${PROGRAM_WEEKS}`}
+            </span>
+            <a href="#/ajustes" className="avatar small" aria-label="Tu perfil y ajustes">
+              {initials(name)}
+            </a>
+          </div>
+        </header>
+        <div key={route} className="animate-in">
+          {page}
+        </div>
+      </main>
+
+      <nav className="bottom-nav" aria-label="Navegación móvil">
+        {MAIN_NAV.map((n) => (
+          <a key={n.path} href={`#${n.path}`} className={`bottom-link${section === n.path ? ' active' : ''}`} aria-current={section === n.path ? 'page' : undefined}>
+            <span aria-hidden>{n.glyph}</span>
+            {n.mobileLabel}
+          </a>
+        ))}
+      </nav>
     </div>
   );
 }

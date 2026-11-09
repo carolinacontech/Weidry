@@ -25,7 +25,7 @@ PWA en español para entrenar fuerza con un programa de 13 semanas centrado en *
 | **Datos** | Exportar e importar una copia completa en JSON. Exportar CSV de series, medidas y cardio; importar CSV de medidas y cardio. Borrar todo. |
 | **Guía** | Ilustraciones esquemáticas **originales** (SVG animado, dibujado en código), con preparación, ejecución, claves, errores comunes y alternativas. Puedes añadir tu propio video o enlace autorizado en cada ejercicio. La app no incluye enlaces de terceros. |
 | **PWA** | Instalable, con manifest, íconos (incluido apple‑touch‑icon) y service worker que precachea todo el build. Guarda inmediatamente cada serie y recupera la sesión tras cerrar o recargar. |
-| **Diseño** | Sistema morado: primario #6D28D9, secundario #A78BFA, superficie #EDE9FE, fondo #F8F5FF, texto #1F2937 / #6B7280, éxito #10B981, alerta #EF4444. Poppins para títulos y botones, Inter para texto (ambas servidas en local). Tarjetas de radio 16 px con sombra suave. Menú lateral en escritorio y barra inferior en móvil. Modo oscuro automático o manual, botones grandes (≥ 44 px), foco visible y respeto por «reducir movimiento». Los tokens están en `src/styles/global.css`. |
+| **Diseño** | Basado en el prototipo de referencia (`FitDefinida`): paleta violeta (`#6933bf`, `#4a2388`, `#efe5fc`, `#ab86ed`, fondo `#f8f6fc`, texto `#241634`, verde `#189976`), Manrope para títulos y DM Sans para texto (servidas en local), tarjetas de radio 20 px con sombra suave, menú lateral ciruela y barra inferior en móvil. Las clases del prototipo (`panel`, `hero`, `metric`, `set-row`, `rest-panel`…) están en `src/styles/proto.css`, enlazadas a los tokens de `src/styles/global.css`. Modo oscuro, botones de 44 px como mínimo, foco visible y respeto por «reducir movimiento». El gris de texto secundario se oscureció ligeramente (`#6f6380` en lugar de `#82768f`) para cumplir el contraste AA. |
 
 ## Imágenes
 
@@ -131,5 +131,7 @@ tests/                         Vitest
 - Nada cambia hasta que pulsas **Aprobar**.
 
 ### Tablas del programa
+
+Las cargas y los ejercicios de las cuatro sesiones (A, B, C y D) son los del prototipo de referencia.
 
 Están en `src/data/plan.ts` (`PLAN_DAYS`). Cada ejercicio tiene 13 valores: `'B'` (peso corporal), `'L'` (alternativa ligera) o `10/15/20` (lb por mancuerna). Los tests comprueban que solo se usan 10, 15 o 20 lb, que las semanas 5 y 9 bajan, y que no hay saltos de más de un escalón entre semanas. Para cambiar las tablas, edita ese archivo.

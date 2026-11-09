@@ -1,6 +1,5 @@
 import { useState } from 'react';
 import { updateProfile } from '../lib/db';
-import { Logo } from './icons';
 import { inputClass } from './ui';
 import { PROGRAM_START } from '../data/plan';
 import { updateSettings } from '../lib/db';
@@ -14,8 +13,8 @@ export function Onboarding() {
   const [name, setName] = useState('');
   const steps = [
     <div key="0" className="flex flex-col gap-4">
-      <span className="grid h-16 w-16 place-items-center rounded-2xl bg-primary text-white shadow-card">
-        <Logo size={40} />
+      <span className="brand-mark" style={{ width: 56, height: 56, fontSize: 34, borderRadius: 16 }} aria-hidden>
+        ✦
       </span>
       <h1 className="font-display text-3xl font-bold leading-tight">Hola, te damos la bienvenida a Weidry</h1>
       <p className="text-lg text-muted">Un programa de fuerza de 13 semanas, guiado serie a serie, que empieza el {formatLong(PROGRAM_START).toLowerCase()}.</p>

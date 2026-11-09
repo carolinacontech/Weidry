@@ -72,6 +72,7 @@ export const PHOTOS = {
 } satisfies Record<string, Photo>;
 
 export function Img({ photo, className = '', decorative }: { photo: Photo; className?: string; decorative?: boolean }) {
+  // object-fit lo aplica la clase (Tailwind) o el CSS del contenedor.
   return (
     <img
       src={photo.src}
@@ -81,7 +82,7 @@ export function Img({ photo, className = '', decorative }: { photo: Photo; class
       loading="lazy"
       decoding="async"
       className={`object-cover ${className}`}
-      style={{ objectPosition: photo.position }}
+      style={{ objectPosition: photo.position, objectFit: 'cover' }}
     />
   );
 }
