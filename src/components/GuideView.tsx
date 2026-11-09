@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { GUIDE, type ExerciseGuide } from '../data/guide';
-import { PLAN_DAYS, allPlanExercises, findPlanExercise } from '../data/plan';
+import { PLAN_DAYS, findPlanExercise, getExercise, planExercises } from '../data/plan';
 import { useSettings } from '../hooks/useData';
 import { navigate } from '../hooks/useRoute';
 import { updateSettings } from '../lib/db';
@@ -140,7 +140,7 @@ export function GuideView({ exerciseId }: { exerciseId?: string }) {
       </div>
     );
   }
-  const exercises = allPlanExercises();
+  const exercises = planExercises();
   return (
     <div>
       <PageHeader title="Guía de técnica" subtitle="Ilustraciones originales, claves y alternativas" />
@@ -155,7 +155,7 @@ export function GuideView({ exerciseId }: { exerciseId?: string }) {
             {PLAN_DAYS[k].title} <span className="text-base font-normal text-muted">· {PLAN_DAYS[k].weekday}</span>
           </h2>
           <ul className="grid grid-cols-2 gap-3">
-            {PLAN_DAYS[k].exercises.map((ex) => (
+            {PLAN_DAYS[k].slots.map((slot) => getExercise(slot.exerciseId)!).map((ex) => (
               <li key={k + ex.id}>
                 <a href={`#/guia/${ex.id}`} className="block h-full rounded-3xl border border-line bg-surface p-2 transition hover:bg-surface-2">
                   <ExerciseIllustration pattern={GUIDE[ex.id].pattern} label={ex.nameEs} className="aspect-[5/4]" />

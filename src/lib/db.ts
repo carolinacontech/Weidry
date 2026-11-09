@@ -1,6 +1,6 @@
 import Dexie, { type EntityTable } from 'dexie';
 import { DEFAULT_PROFILE, type Profile } from '../data/plan';
-import { DEFAULT_INVENTORY, type InventoryItem } from './weights';
+import { DEFAULT_INVENTORY, normalizeInventory, type InventoryItem } from './weights';
 import { DEFAULT_SETTINGS, type CardioLog, type LoadAdjustment, type Measurement, type Settings, type WorkoutSession } from './types';
 
 export interface KV {
@@ -24,6 +24,31 @@ export class AppDB extends Dexie {
       cardio: '++id, date',
       adjustments: '++id, exerciseId, createdAt',
     });
+    // v2: equipamiento real (mancuernas fijas 10/15/20 lb + alternativas ligeras) y programa actualizado.
+    // El historial (sesiones, medidas, cardio) se conserva intacto.
+    this.version(2)
+      .stores({
+        kv: 'key',
+        sessions: 'id, date, status, dayKey, week',
+        measurements: '++id, date',
+        cardio: '++id, date',
+        adjustments: '++id, exerciseId, createdAt',
+      })
+      .upgrade(async (tx) => {
+        // Los ajustes de la v1 eran diferencias en lb sobre el plan anterior: ya no aplican.
+        await tx.table('adjustments').clear();
+        // Inventario: se sustituye por el equipamiento real indicado.
+        await tx.table('kv').put({ key: 'inventory', value: DEFAULT_INVENTORY });
+        // Ajustes: la pregunta de dificultad pasa a ser RIR.
+        const s = await tx.table('kv').get('settings');
+        if (s?.value) {
+          const { askDifficulty, ...rest } = s.value as Record<string, unknown>;
+          await tx.table('kv').put({ key: 'settings', value: { ...rest, askRir: askDifficulty ?? true } });
+        }
+        // Prioridad: fuerza y glúteos; se ocultan por defecto las referencias numéricas de báscula/cintura.
+        const p = await tx.table('kv').get('profile');
+        if (p?.value) await tx.table('kv').put({ key: 'profile', value: { ...(p.value as object), showAestheticReference: false, showWeightGoal: false } });
+      });
   }
 }
 
@@ -56,7 +81,7 @@ export async function updateProfile(patch: Partial<Profile>): Promise<void> {
 }
 
 export async function getInventory(): Promise<InventoryItem[]> {
-  return getKV<InventoryItem[]>('inventory', DEFAULT_INVENTORY);
+  return normalizeInventory(await getKV<Partial<InventoryItem>[]>('inventory', DEFAULT_INVENTORY));
 }
 
 export async function setInventory(items: InventoryItem[]): Promise<void> {

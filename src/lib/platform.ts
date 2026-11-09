@@ -80,11 +80,22 @@ export function speechSupported(): boolean {
   return typeof window !== 'undefined' && 'speechSynthesis' in window;
 }
 
+let speakingUntil = 0;
+
+/** true mientras la app habla y durante 1,2 s después (para que los comandos de voz no se activen con su propia voz). */
+export function isAppSpeaking(): boolean {
+  return (speechSupported() && window.speechSynthesis.speaking) || Date.now() < speakingUntil;
+}
+
 export function speak(text: string): void {
   if (!speechSupported()) return;
   const synth = window.speechSynthesis;
   synth.cancel();
   const u = new SpeechSynthesisUtterance(text);
+  speakingUntil = Date.now() + 1200 + text.length * 80;
+  u.onend = () => {
+    speakingUntil = Date.now() + 1200;
+  };
   u.lang = 'es-ES';
   const v = pickVoice();
   if (v) {

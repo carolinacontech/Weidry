@@ -40,8 +40,8 @@ export function StartWorkoutButton({
   const create = async () => {
     setLoading(true);
     try {
-      const [settings, inventory, adjustments] = await Promise.all([getSettings(), getInventory(), db.adjustments.toArray()]);
-      const s = createSession({ date, week, dayKey, inventory, adjustments, unit: settings.unit });
+      const [settings, inventory, adjustments, sessions] = await Promise.all([getSettings(), getInventory(), db.adjustments.toArray(), db.sessions.toArray()]);
+      const s = createSession({ date, week, dayKey, inventory, adjustments, sessions, unit: settings.unit });
       await saveSession(s);
       navigate(`/coach/${s.id}`);
     } catch (e) {

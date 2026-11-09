@@ -4,10 +4,11 @@ import { useSessions, useSettings } from '../hooks/useData';
 import { navigate } from '../hooks/useRoute';
 import { db } from '../lib/db';
 import { formatLong } from '../lib/dates';
-import { DIFFICULTY_LABELS } from '../lib/progression';
+import { DIFFICULTY_LABELS, rirLabel } from '../lib/progression';
 import { exerciseName } from '../lib/session';
-import { sessionVolume } from '../lib/stats';
-import { formatLoad } from '../lib/weights';
+import { modeOf, sessionVolume } from '../lib/stats';
+import { setOption } from '../lib/types';
+import { formatOption } from '../lib/weights';
 import { Button, Card, Loading, Modal, Notice, PageHeader, useToast } from './ui';
 
 const STATUS = { completed: 'Completada', in_progress: 'En curso', abandoned: 'Incompleta' } as const;
@@ -49,7 +50,7 @@ export function HistoryView() {
                   <ul className="mt-3 flex flex-col gap-2 text-sm">
                     {s.exercises.map((e) => {
                       const plan = findPlanExercise(e.exerciseId);
-                      const lt = e.substitute?.loadType ?? plan?.loadType ?? 'body';
+                      const lt = modeOf(e);
                       return (
                         <li key={e.exerciseId} className="rounded-2xl bg-surface-2 p-2">
                           <p className="font-medium">
@@ -58,7 +59,9 @@ export function HistoryView() {
                           </p>
                           {e.sets.map((st) => (
                             <p key={st.setNumber} className="tabular text-muted">
-                              S{st.setNumber}: {st.reps} {plan?.timed && !e.substitute ? 's' : 'reps'} · {formatLoad(st.loadLb, lt, settings.unit)}
+                              S{st.setNumber}: {st.reps} {plan?.timed && !e.substitute ? 's' : 'reps'} · {formatOption(setOption(st), st.mode ?? lt, settings.unit)}
+                              {st.rir !== undefined && st.rir !== null ? ` · RIR ${rirLabel(st.rir)}` : ''}
+                              {st.tempo === 'lento' ? ' · tempo lento' : ''}
                               {st.difficulty ? ` · ${DIFFICULTY_LABELS[st.difficulty]}` : ''}
                               {st.pain ? ' · ⚠ dolor' : ''}
                               {!st.techniqueOk ? ' · técnica a revisar' : ''}

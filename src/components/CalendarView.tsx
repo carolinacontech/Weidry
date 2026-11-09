@@ -2,9 +2,9 @@ import { useState } from 'react';
 import { DAY_LABELS, PLAN_DAYS, PROGRAM_WEEKS } from '../data/plan';
 import { useAdjustments, useCardio, useInventory, useSessions, useSettings } from '../hooks/useData';
 import { formatLong, formatShort, today } from '../lib/dates';
-import { cardioTargetForWeek, isRecoveryWeek, isStrengthDay, programDayFor, setsFor, setsForWeek, weekDates, type ProgramDay } from '../lib/program';
-import { proposedLoad } from '../lib/session';
-import { formatLoad } from '../lib/weights';
+import { cardioTargetForWeek, isRecoveryWeek, isStrengthDay, programDayFor, setsForWeek, weekDates, type ProgramDay } from '../lib/program';
+import { DayPlanList } from './DayPlanList';
+import { LoadTable } from './LoadTable';
 import { CardioLogger } from './CardioLogger';
 import { StartWorkoutButton } from './StartWorkout';
 import { Loading, Modal, Notice, PageHeader } from './ui';
@@ -18,6 +18,7 @@ export function CalendarView() {
   const inventory = useInventory();
   const adjustments = useAdjustments();
   const [selected, setSelected] = useState<ProgramDay | null>(null);
+  const [view, setView] = useState<'cal' | 'table'>('cal');
 
   if (!sessions || !cardio || !settings || !inventory || !adjustments) return <Loading />;
   const t = today();
@@ -26,6 +27,12 @@ export function CalendarView() {
   return (
     <div>
       <PageHeader title="Plan de 13 semanas" subtitle="Toca un día para ver el detalle o entrenar" />
+      <div className="mb-4 flex gap-2" role="tablist" aria-label="Vista del plan">
+        <button type="button" role="tab" aria-selected={view === 'cal'} onClick={() => setView('cal')} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${view === 'cal' ? 'bg-ink text-bg' : 'bg-surface-2'}`}>Calendario</button>
+        <button type="button" role="tab" aria-selected={view === 'table'} onClick={() => setView('table')} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${view === 'table' ? 'bg-ink text-bg' : 'bg-surface-2'}`}>Tabla de cargas</button>
+      </div>
+      {view === 'table' ? <LoadTable /> : null}
+      <div hidden={view !== 'cal'}>
       <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted" aria-label="Leyenda">
         <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full bg-sage" /> Hecho</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full border-2 border-dashed border-clay" /> Pendiente pasado</span>
@@ -78,6 +85,7 @@ export function CalendarView() {
           );
         })}
       </ol>
+      </div>
 
       <Modal open={!!selected} onClose={() => setSelected(null)} title={selected ? `${DAY_LABELS[selected.dayKey]} · ${formatLong(selected.date)}` : ''}>
         {selected && selected.week && isStrengthDay(selected.dayKey) ? (
@@ -85,20 +93,8 @@ export function CalendarView() {
             <p className="text-muted">
               Semana {selected.week} · {PLAN_DAYS[selected.dayKey].focus}
             </p>
-            <ul className="divide-y divide-line">
-              {PLAN_DAYS[selected.dayKey].exercises.map((ex) => {
-                const p = proposedLoad(ex, selected.week!, inventory, adjustments, settings.unit);
-                return (
-                  <li key={ex.id} className="py-2">
-                    <p className="font-medium">{ex.nameEs} <span className="text-sm font-normal text-muted">({ex.name})</span></p>
-                    <p className="text-sm text-muted">
-                      {setsFor(ex, selected.week!)} × {ex.reps} · {formatLoad(p.loadLb, ex.loadType, settings.unit)}
-                      {p.planLb !== p.loadLb && ex.loadType !== 'body' ? ` (plan: ${formatLoad(p.targetLb, ex.loadType, settings.unit)})` : ''}
-                    </p>
-                  </li>
-                );
-              })}
-            </ul>
+            {isRecoveryWeek(selected.week) ? <Notice>Semana de recuperación: menos series y cargas más ligeras.</Notice> : null}
+            <DayPlanList dayKey={selected.dayKey} week={selected.week} inventory={inventory} adjustments={adjustments} sessions={sessions} unit={settings.unit} />
             <StartWorkoutButton date={selected.date > t ? t : selected.date} week={selected.week} dayKey={selected.dayKey} label="Hacer este entreno ahora" size="lg" />
             <p className="text-xs text-muted">Se registrará como el entreno {selected.dayKey} de la semana {selected.week}.</p>
           </div>

@@ -2,7 +2,7 @@ import { useLiveQuery } from 'dexie-react-hooks';
 import { DEFAULT_PROFILE } from '../data/plan';
 import { db } from '../lib/db';
 import { DEFAULT_SETTINGS, type Settings } from '../lib/types';
-import { DEFAULT_INVENTORY, type InventoryItem } from '../lib/weights';
+import { DEFAULT_INVENTORY, normalizeInventory, type InventoryItem } from '../lib/weights';
 
 export function useSettings(): Settings | undefined {
   return useLiveQuery(async () => {
@@ -21,7 +21,7 @@ export function useProfile() {
 export function useInventory(): InventoryItem[] | undefined {
   return useLiveQuery(async () => {
     const row = await db.kv.get('inventory');
-    return (row?.value as InventoryItem[]) ?? DEFAULT_INVENTORY;
+    return normalizeInventory((row?.value as Partial<InventoryItem>[]) ?? DEFAULT_INVENTORY);
   });
 }
 

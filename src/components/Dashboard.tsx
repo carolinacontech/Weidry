@@ -1,13 +1,14 @@
 import { useState } from 'react';
-import { DAY_LABELS, PLAN_DAYS, PROGRAM_START, PROGRAM_WEEKS } from '../data/plan';
+import { DAY_LABELS, PLAN_DAYS, PROGRAM_START, PROGRAM_WEEKS, RIR_TARGET, getExercise } from '../data/plan';
 import { useAdjustments, useCardio, useInventory, useMeasurements, useProfile, useSessions, useSettings } from '../hooks/useData';
 import { navigate } from '../hooks/useRoute';
 import { formatLong, today } from '../lib/dates';
-import { cardioTargetForWeek, dateFor, isRecoveryWeek, isStrengthDay, programDayFor, setsFor, setsForWeek } from '../lib/program';
-import { proposedLoad, sessionProgress } from '../lib/session';
-import { adherence, cardioThisWeek } from '../lib/stats';
-import type { WorkoutSession } from '../lib/types';
-import { formatLoad, formatWeight } from '../lib/weights';
+import { cardioTargetForWeek, dateFor, isRecoveryWeek, isStrengthDay, programDayFor, setsForWeek } from '../lib/program';
+import { sessionProgress } from '../lib/session';
+import { adherence, cardioThisWeek, strengthProgress, weekSummaries } from '../lib/stats';
+import type { CardioLog, LoadAdjustment, WorkoutSession } from '../lib/types';
+import { formatOptionShort, formatWeight, type InventoryItem } from '../lib/weights';
+import { DayPlanList } from './DayPlanList';
 import { CardioLogger } from './CardioLogger';
 import { StartWorkoutButton, discardSession, useActiveSession } from './StartWorkout';
 import { Button, Card, Loading, Modal, Notice, ProgressRing } from './ui';
@@ -38,7 +39,6 @@ export function Dashboard() {
   const lastM = [...measurements].reverse();
   const lastWeight = lastM.find((m) => m.weightLb)?.weightLb ?? profile.weightLb;
   const lastWaist = lastM.find((m) => m.waistCm)?.waistCm ?? profile.waistCm;
-  const weightProgress = profile.weightLb > profile.goalWeightLb ? (profile.weightLb - lastWeight) / (profile.weightLb - profile.goalWeightLb) : 0;
 
   const [hh, mm] = settings.reminderTime.split(':').map(Number);
   const now = new Date();
@@ -87,6 +87,7 @@ export function Dashboard() {
             unit={settings.unit}
             inventory={inventory}
             adjustments={adjustments}
+            sessions={sessions}
           />
         ) : pd.status === 'active' && pd.dayKey === 'cardio' ? (
           <div className="flex flex-col gap-3">
@@ -176,28 +177,16 @@ export function Dashboard() {
         </Card>
       </div>
 
-      <Card aria-label="Progreso">
-        <div className="mb-2 flex items-center justify-between">
-          <h2 className="font-semibold">Progreso</h2>
-          <a href="#/progreso" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Registrar medidas →</a>
-        </div>
-        <dl className="grid grid-cols-2 gap-3">
-          <div>
-            <dt className="text-sm text-muted">Peso actual</dt>
-            <dd className="tabular text-2xl font-bold">{formatWeight(lastWeight, 'lb')}</dd>
-            <dd className="text-xs text-muted">Inicio {profile.weightLb} lb · objetivo {profile.goalWeightLb} lb</dd>
-          </div>
-          <div>
-            <dt className="text-sm text-muted">Cintura</dt>
-            <dd className="tabular text-2xl font-bold">{lastWaist} cm</dd>
-            <dd className="text-xs text-muted">Inicio {profile.waistCm} cm</dd>
-          </div>
-        </dl>
-        <div className="mt-3 h-2 overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Avance hacia el peso objetivo" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(Math.max(0, Math.min(1, weightProgress)) * 100)}>
-          <div className="h-full rounded-full bg-sage" style={{ width: `${Math.max(0, Math.min(1, weightProgress)) * 100}%` }} />
-        </div>
-        <p className="mt-2 text-xs text-muted">El peso fluctúa a diario; mira la tendencia de varias semanas. No hay garantías de resultados.</p>
-      </Card>
+      <StrengthCard sessions={sessions} cardio={cardio} unit={settings.unit} week={week} />
+
+      {profile.showWeightGoal ? (
+        <Card aria-label="Medidas">
+          <h2 className="mb-2 font-semibold">Medidas (opcional)</h2>
+          <p className="text-sm text-muted">
+            Peso {formatWeight(lastWeight, 'lb')} · cintura {lastWaist} cm. Mira la tendencia de varias semanas; no hay garantías de resultados.
+          </p>
+        </Card>
+      ) : null}
 
       <Notice>
         Esta app no sustituye el consejo médico. Con hígado graso u otra condición clínica, consulta con tu profesional de la salud antes de cambiar tu actividad o alimentación, y si aparece dolor, mareo o falta de aire.
@@ -274,14 +263,16 @@ function TodayStrength({
   unit,
   inventory,
   adjustments,
+  sessions,
 }: {
   dayKey: 'A' | 'B' | 'C' | 'D';
   week: number;
   date: string;
   done: boolean;
   unit: 'lb' | 'kg';
-  inventory: Parameters<typeof proposedLoad>[2];
-  adjustments: Parameters<typeof proposedLoad>[3];
+  inventory: InventoryItem[];
+  adjustments: LoadAdjustment[];
+  sessions: WorkoutSession[];
 }) {
   const day = PLAN_DAYS[dayKey];
   return (
@@ -291,25 +282,51 @@ function TodayStrength({
         <h2 id="today-title" className="font-display text-2xl font-semibold">{day.title}</h2>
         <p className="text-muted">{day.focus} · ~{35 + setsForWeek(week) * 5} min</p>
       </div>
-      <ul className="divide-y divide-line">
-        {day.exercises.map((ex) => {
-          const p = proposedLoad(ex, week, inventory, adjustments, unit);
-          return (
-            <li key={ex.id} className="flex items-center justify-between gap-3 py-2">
-              <div className="min-w-0">
-                <a href={`#/guia/${ex.id}`} className="font-medium hover:underline">{ex.nameEs}</a>
-                <p className="text-sm text-muted">
-                  {setsFor(ex, week)} × {ex.reps}
-                </p>
-              </div>
-              <p className="tabular shrink-0 text-right text-sm font-semibold">{formatLoad(p.loadLb, ex.loadType, unit).replace(' (una mancuerna)', '')}</p>
-            </li>
-          );
-        })}
-      </ul>
-      <p className="text-xs text-muted">Calentamiento de 5 min incluido · descansos de 60–90 s (hasta 120 s en los más intensos). Las cargas son propuestas: ajústalas a tu capacidad real.</p>
+      {isRecoveryWeek(week) ? <Notice tone="info">Semana de recuperación: menos series y cargas más ligeras para consolidar fuerza.</Notice> : null}
+      <DayPlanList dayKey={dayKey} week={week} inventory={inventory} adjustments={adjustments} sessions={sessions} unit={unit} />
+      <p className="text-xs text-muted">
+        Calentamiento de 5 min · descansos de 60–90 s (hasta 120 s en los más intensos). Todas las cargas son propuestas condicionadas a tu técnica y a terminar con {RIR_TARGET.min}–{RIR_TARGET.max} repeticiones en reserva.
+      </p>
       <StartWorkoutButton date={date} week={week} dayKey={dayKey} label={done ? 'Repetir entrenamiento' : 'Empezar entrenamiento'} />
     </div>
   );
 }
 
+const KEY_LIFTS = ['glute-bridge', 'romanian-deadlift', 'goblet-squat', 'single-arm-row'];
+
+function StrengthCard({ sessions, cardio, unit, week }: { sessions: WorkoutSession[]; cardio: CardioLog[]; unit: 'lb' | 'kg'; week: number }) {
+  const summaries = weekSummaries(sessions, cardio);
+  const current = summaries[week - 1];
+  return (
+    <Card aria-label="Fuerza y glúteos">
+      <div className="mb-2 flex items-center justify-between">
+        <h2 className="font-semibold">Fuerza y glúteos</h2>
+        <a href="#/progreso" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Ver progreso →</a>
+      </div>
+      <p className="mb-3 text-sm text-muted">
+        Series de glúteo esta semana: <strong className="tabular text-ink">{current?.gluteSets ?? 0}</strong>
+      </p>
+      <ul className="divide-y divide-line">
+        {KEY_LIFTS.map((id) => {
+          const ex = getExercise(id)!;
+          const p = strengthProgress(sessions, id);
+          return (
+            <li key={id} className="flex items-center justify-between gap-3 py-2 text-sm">
+              <span className="font-medium">{ex.nameEs}</span>
+              <span className="tabular text-right text-muted">
+                {p ? (
+                  <>
+                    {formatOptionShort(p.first.option, ex.mode, unit)} × {p.first.reps} → <strong className="text-ink">{formatOptionShort(p.last.option, ex.mode, unit)} × {p.last.reps}</strong>
+                  </>
+                ) : (
+                  'sin registros'
+                )}
+              </span>
+            </li>
+          );
+        })}
+      </ul>
+      <p className="mt-2 text-xs text-muted">La meta es ganar fuerza y calidad de movimiento. Las medidas corporales son opcionales y secundarias.</p>
+    </Card>
+  );
+}

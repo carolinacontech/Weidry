@@ -1,20 +1,20 @@
 import { useLiveQuery } from 'dexie-react-hooks';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { GUIDE, WARMUP_STEPS, type Alternative } from '../data/guide';
-import { DAY_LABELS, WARMUP_MINUTES, findPlanExercise, type LoadType, type PlanExercise } from '../data/plan';
+import { DAY_LABELS, RIR_TARGET, WARMUP_MINUTES, getExercise, type Exercise, type Mode } from '../data/plan';
 import { useAdjustments, useInventory, useSessions, useSettings } from '../hooks/useData';
 import { useNow } from '../hooks/useNow';
 import { navigate } from '../hooks/useRoute';
 import { useWakeLock } from '../hooks/useWakeLock';
-import { db, saveSession } from '../lib/db';
-import { beep, doneChime, speak, stopSpeaking, unlockAudio, vibrate } from '../lib/platform';
-import { plannedLoadLb } from '../lib/program';
-import { DIFFICULTY_LABELS, suggestProgression, type Difficulty, type Suggestion } from '../lib/progression';
+import { db, saveSession, updateSettings } from '../lib/db';
+import { beep, doneChime, isAppSpeaking, speak, stopSpeaking, unlockAudio, vibrate } from '../lib/platform';
+import { RIR_OPTIONS, rirLabel, suggestProgression, type Suggestion } from '../lib/progression';
 import { exerciseName, nextPendingIndex, sessionProgress } from '../lib/session';
-import { exerciseHistory } from '../lib/stats';
+import { exerciseHistory, topOption } from '../lib/stats';
 import { addTime, createTimer, cuesBetween, formatClock, pause, remainingMs, resume, start, tick, type Cue, type TimerState } from '../lib/timer';
-import type { ExerciseLog, SetLog, Settings, WorkoutSession } from '../lib/types';
-import { availableLoadsLb, formatLoad, formatWeight, type InventoryItem } from '../lib/weights';
+import { plannedOptionOf, setOption, type ExerciseLog, type SetLog, type Settings, type Tempo, type WorkoutSession } from '../lib/types';
+import { COMMAND_HELP, createListener, speechRecognitionSupported, type ListenerState, type VoiceCommand } from '../lib/voiceCommands';
+import { compareOptions, formatOption, formatOptionShort, ladderFor, nearestAtOrBelow, optionIndex, sameOption, type InventoryItem, type LoadOption } from '../lib/weights';
 import { ExerciseIllustration } from './ExerciseIllustration';
 import { GuideContent } from './GuideView';
 import { RestTimer } from './RestTimer';
@@ -28,14 +28,21 @@ const CUE_SPEECH: Partial<Record<Cue, string>> = {
   one: 'Uno',
 };
 
-function repsText(ex: PlanExercise) {
-  if (ex.timed) return `${ex.repsMin} a ${ex.repsMax} segundos${ex.perSide ? ' por lado' : ''}`;
-  if (ex.repsMin === ex.repsMax) return `${ex.repsMax} repeticiones${ex.perSide ? ' por lado' : ''}`;
-  return `${ex.repsMin} a ${ex.repsMax} repeticiones${ex.perSide ? ' por lado' : ''}`;
+const MODE_LABELS: Record<Exclude<Mode, 'body'>, string> = {
+  held: '1 mancuerna, ambas manos',
+  each: '1 en cada mano',
+  one: '1 mancuerna, una mano',
+};
+
+function repsText(ex: Exercise) {
+  const side = ex.perSide ? ' por lado' : '';
+  if (ex.timed) return `${ex.repsMin} a ${ex.repsMax} segundos${side}`;
+  if (ex.repsMin === ex.repsMax) return `${ex.repsMax} repeticiones${side}`;
+  return `${ex.repsMin} a ${ex.repsMax} repeticiones${side}`;
 }
 
-function effectiveLoadType(log: ExerciseLog, ex: PlanExercise): LoadType {
-  return log.substitute?.loadType ?? ex.loadType;
+function modeOfLog(log: ExerciseLog, ex: Exercise): Mode {
+  return log.substitute?.mode ?? ex.mode;
 }
 
 export function CoachMode({ sessionId }: { sessionId: string }) {
@@ -75,27 +82,32 @@ function Coach({
   const [muted, setMuted] = useState(!settings.sound && !settings.voice);
   const [showGuide, setShowGuide] = useState(false);
   const [showSubstitute, setShowSubstitute] = useState(false);
+  const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const [painOpen, setPainOpen] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
   const active = s.status === 'in_progress';
   const wake = useWakeLock(settings.wakeLock && active && !s.paused);
 
-  // Al cambiar de fase o de ejercicio, volver arriba.
+  // Siempre trabajar con la versión más reciente (los comandos de voz llegan de forma asíncrona).
+  const sRef = useRef(s);
+  sRef.current = s;
+
   const scroller = useRef<HTMLDivElement>(null);
   useEffect(() => {
     scroller.current?.scrollTo({ top: 0 });
   }, [s.phase, s.exerciseIndex]);
 
   const commit = (next: WorkoutSession) => {
+    sRef.current = next;
     setSession(next);
     void saveSession(next);
   };
 
   const log = s.exercises[s.exerciseIndex];
-  const ex = findPlanExercise(log.exerciseId)!;
+  const ex = getExercise(log.exerciseId)!;
   const guide = GUIDE[ex.id];
   const name = exerciseName(log);
-  const loadType = effectiveLoadType(log, ex);
+  const mode = modeOfLog(log, ex);
   const setNumber = Math.min(log.sets.length + 1, log.plannedSets);
   const prog = sessionProgress(s);
 
@@ -116,8 +128,7 @@ function Coach({
     const prev = prevRemaining.current;
     prevRemaining.current = rem;
     if (prev === null || s.rest.status !== 'running') return;
-    const cues = cuesBetween(prev, rem, s.rest.durationMs);
-    for (const c of cues) {
+    for (const c of cuesBetween(prev, rem, s.rest.durationMs)) {
       if (c === 'done') {
         if (soundOn) doneChime();
         if (settings.vibration) vibrate([200, 100, 200]);
@@ -128,46 +139,55 @@ function Coach({
       if (voiceOn && CUE_SPEECH[c] && (c === 'ten' || c === 'halfway' || !soundOn)) speak(CUE_SPEECH[c]!);
       if (settings.vibration && c === 'ten') vibrate(80);
     }
-    const ticked = tick(s.rest, now);
-    if (ticked.status === 'done') finishRest();
+    if (tick(s.rest, now).status === 'done') finishRest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [now, s.phase, s.rest]);
 
-  // Si al reanudar una sesión interrumpida el descanso ya terminó, pasar a la serie.
   useEffect(() => {
     if (s.phase === 'rest' && s.rest && s.rest.status === 'running' && remainingMs(s.rest, Date.now()) === 0) finishRest();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Anuncio por voz al empezar cada serie.
+  const instruction = () => {
+    const cur = sRef.current;
+    const l = cur.exercises[cur.exerciseIndex];
+    const e = getExercise(l.exerciseId)!;
+    const n = Math.min(l.sets.length + 1, l.plannedSets);
+    const load = formatOption(plannedOptionOf(l), modeOfLog(l, e), settings.unit);
+    return `Serie ${n} de ${l.plannedSets}. ${exerciseName(l)}. ${repsText(e)}. ${load}. Termina con ${RIR_TARGET.min} o ${RIR_TARGET.max} repeticiones en reserva.`;
+  };
+
   const announceKey = s.phase === 'work' ? `${s.exerciseIndex}-${log.sets.length}-${log.substitute?.id ?? ''}` : '';
   useEffect(() => {
     if (!announceKey || !voiceOn) return;
-    speak(`Serie ${setNumber} de ${log.plannedSets}. ${name}. ${repsText(ex)}.`);
+    speak(instruction());
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [announceKey]);
 
   useEffect(() => () => stopSpeaking(), []);
 
-  function restDurationFor(e: PlanExercise) {
+  function restDurationFor(e: Exercise) {
     return settings.restSec || e.restSec;
   }
 
   function finishRest() {
-    commit({ ...s, phase: 'work', rest: null });
+    commit({ ...sRef.current, phase: 'work', rest: null });
   }
 
   function goToSummary(next: WorkoutSession) {
     commit({ ...next, phase: 'summary', rest: null });
-    if (voiceOn) speak('¡Sesión completada! Buen trabajo.');
+    if (voiceOn) speak('Sesión completada. Buen trabajo.');
   }
 
   function completeSet(entry: Omit<SetLog, 'setNumber' | 'completedAt'>) {
     unlockAudio();
-    const sets = [...log.sets, { ...entry, setNumber: log.sets.length + 1, completedAt: new Date().toISOString() }];
-    const exDone = sets.length >= log.plannedSets;
-    const exercises = s.exercises.map((e, i) => (i === s.exerciseIndex ? { ...e, sets, status: exDone ? ('done' as const) : e.status } : e));
-    let next: WorkoutSession = { ...s, exercises };
+    const cur = sRef.current;
+    const l = cur.exercises[cur.exerciseIndex];
+    const e = getExercise(l.exerciseId)!;
+    const sets = [...l.sets, { ...entry, setNumber: l.sets.length + 1, completedAt: new Date().toISOString() }];
+    const exDone = sets.length >= l.plannedSets;
+    const exercises = cur.exercises.map((x, i) => (i === cur.exerciseIndex ? { ...x, sets, status: exDone ? ('done' as const) : x.status } : x));
+    let next: WorkoutSession = { ...cur, exercises };
     if (settings.vibration) vibrate(60);
 
     if (entry.pain) {
@@ -176,59 +196,92 @@ function Coach({
       if (voiceOn) speak('Registraste dolor. Detén el ejercicio.');
       return;
     }
-
-    const nextIdx = exDone ? nextPendingIndex(next, s.exerciseIndex) : s.exerciseIndex;
+    const nextIdx = exDone ? nextPendingIndex(next, cur.exerciseIndex) : cur.exerciseIndex;
     if (nextIdx === -1) return goToSummary(next);
-    const restFor = findPlanExercise(next.exercises[nextIdx].exerciseId)!;
-    const dur = exDone ? restDurationFor(ex) : restDurationFor(restFor);
+    const dur = restDurationFor(e);
     next = { ...next, exerciseIndex: nextIdx, phase: 'rest', rest: start(createTimer(dur), Date.now()) };
     commit(next);
-    if (voiceOn) speak(`Serie completada. Descansa ${dur} segundos.`);
+    if (voiceOn) speak(`Serie registrada. Descansa ${dur} segundos.`);
   }
 
   function skipExercise() {
-    const exercises = s.exercises.map((e, i) => (i === s.exerciseIndex ? { ...e, status: e.sets.length > 0 ? ('done' as const) : ('skipped' as const) } : e));
-    const next = { ...s, exercises };
-    const idx = nextPendingIndex(next, s.exerciseIndex);
+    const cur = sRef.current;
+    const exercises = cur.exercises.map((e, i) => (i === cur.exerciseIndex ? { ...e, status: e.sets.length > 0 ? ('done' as const) : ('skipped' as const) } : e));
+    const next = { ...cur, exercises };
+    const idx = nextPendingIndex(next, cur.exerciseIndex);
     if (idx === -1) return goToSummary(next);
     commit({ ...next, exerciseIndex: idx, phase: 'work', rest: null });
     toast('Ejercicio omitido', 'info');
   }
 
   function move(delta: number) {
-    const idx = Math.min(s.exercises.length - 1, Math.max(0, s.exerciseIndex + delta));
-    if (idx === s.exerciseIndex) return;
-    // Volver a un ejercicio omitido lo reactiva.
-    const exercises = s.exercises.map((e, i) => (i === idx && e.status === 'skipped' ? { ...e, status: 'pending' as const } : e));
-    commit({ ...s, exercises, exerciseIndex: idx, phase: 'work', rest: null });
+    const cur = sRef.current;
+    const idx = Math.min(cur.exercises.length - 1, Math.max(0, cur.exerciseIndex + delta));
+    if (idx === cur.exerciseIndex) return;
+    const exercises = cur.exercises.map((e, i) => (i === idx && e.status === 'skipped' ? { ...e, status: 'pending' as const } : e));
+    commit({ ...cur, exercises, exerciseIndex: idx, phase: 'work', rest: null });
   }
 
   function substitute(alt: Alternative | null) {
-    const exercises = s.exercises.map((e, i) => {
-      if (i !== s.exerciseIndex) return e;
-      if (!alt) return { ...e, substitute: undefined, sets: [], status: 'pending' as const, plannedLoadLb: e.plannedLoadLb };
-      return { ...e, substitute: { id: alt.id, name: alt.name, loadType: alt.loadType }, sets: [], status: 'pending' as const };
+    const cur = sRef.current;
+    const exercises = cur.exercises.map((e, i) => {
+      if (i !== cur.exerciseIndex) return e;
+      if (!alt) return { ...e, substitute: undefined, sets: [], status: 'pending' as const };
+      return { ...e, substitute: { id: alt.id, name: alt.name, mode: alt.mode }, sets: [], status: 'pending' as const };
     });
-    commit({ ...s, exercises, phase: 'work', rest: null });
+    commit({ ...cur, exercises, phase: 'work', rest: null });
     setShowSubstitute(false);
     toast(alt ? `Sustituido por: ${alt.name}` : 'Ejercicio original restaurado');
   }
 
-  function togglePause() {
+  function setPaused(paused: boolean) {
+    const cur = sRef.current;
+    if (!!cur.paused === paused) return;
     const t = Date.now();
-    if (s.paused) {
+    if (!paused) {
       unlockAudio();
-      commit({ ...s, paused: false, rest: s.rest ? resume(s.rest, t) : s.rest });
+      commit({ ...cur, paused: false, rest: cur.rest ? resume(cur.rest, t) : cur.rest });
     } else {
       stopSpeaking();
-      commit({ ...s, paused: true, rest: s.rest ? pause(s.rest, t) : s.rest });
+      commit({ ...cur, paused: true, rest: cur.rest ? pause(cur.rest, t) : cur.rest });
     }
   }
 
   function setRest(fn: (r: TimerState) => TimerState) {
-    if (!s.rest) return;
-    commit({ ...s, rest: fn(s.rest) });
+    const cur = sRef.current;
+    if (!cur.rest) return;
+    commit({ ...cur, rest: fn(cur.rest) });
   }
+
+  // ---------- Comandos de voz ----------
+  const submitRef = useRef<(() => void) | null>(null);
+  const [listenState, setListenState] = useState<ListenerState>('off');
+  const voiceCmdOn = settings.voiceCommands && active && s.phase !== 'summary';
+  const handleCommand = useRef<(c: VoiceCommand, heard: string) => void>(() => undefined);
+  handleCommand.current = (c, heard) => {
+    const cur = sRef.current;
+    toast(`🎙 “${heard.trim()}”`, 'info');
+    if (c === 'pause') return setPaused(true);
+    if (c === 'resume') return setPaused(false);
+    if (cur.paused) return;
+    if (c === 'repeat') return speak(cur.phase === 'rest' ? 'Estás descansando. Di saltar para empezar la siguiente serie.' : instruction());
+    if (cur.phase === 'rest') {
+      if (c === 'complete' || c === 'skipRest') return finishRest();
+      if (c === 'addTime') return setRest((r) => addTime(r, 15, Date.now()));
+    }
+    if (cur.phase === 'warmup' && (c === 'complete' || c === 'skipRest')) return commit({ ...cur, phase: 'work' });
+    if (cur.phase === 'work') {
+      if (c === 'complete') return submitRef.current?.();
+      if (c === 'next') return move(1);
+      if (c === 'previous') return move(-1);
+    }
+  };
+  useEffect(() => {
+    if (!voiceCmdOn) return;
+    const l = createListener({ onCommand: (c, h) => handleCommand.current(c, h), onState: setListenState, isAppSpeaking });
+    l.start();
+    return () => l.stop();
+  }, [voiceCmdOn]);
 
   const nextLabel = (() => {
     const l = s.exercises[s.exerciseIndex];
@@ -247,9 +300,25 @@ function Coach({
             <p className="text-xs text-muted">Semana {s.week} · {prog.done}/{prog.total} series</p>
           </div>
           {s.phase !== 'summary' ? (
-            <button type="button" onClick={togglePause} className="min-h-11 rounded-full px-3 font-semibold text-sage-strong hover:bg-surface-2" aria-pressed={!!s.paused}>
-              {s.paused ? '▶ Seguir' : '⏸ Pausar'}
-            </button>
+            <div className="flex items-center">
+              <button
+                type="button"
+                onClick={() => {
+                  unlockAudio();
+                  if (!speechRecognitionSupported()) return setShowVoiceHelp(true);
+                  void updateSettings({ voiceCommands: !settings.voiceCommands });
+                  if (!settings.voiceCommands) setShowVoiceHelp(true);
+                }}
+                aria-pressed={settings.voiceCommands}
+                aria-label={settings.voiceCommands ? 'Desactivar comandos de voz' : 'Activar comandos de voz'}
+                className={`h-11 w-11 rounded-full text-lg ${settings.voiceCommands ? (listenState === 'listening' ? 'bg-sage text-on-sage' : 'bg-warn-soft') : 'hover:bg-surface-2'}`}
+              >
+                🎙
+              </button>
+              <button type="button" onClick={() => setPaused(!s.paused)} className="min-h-11 rounded-full px-3 font-semibold text-sage-strong hover:bg-surface-2" aria-pressed={!!s.paused}>
+                {s.paused ? '▶ Seguir' : '⏸ Pausa'}
+              </button>
+            </div>
           ) : (
             <span className="w-16" />
           )}
@@ -257,6 +326,17 @@ function Coach({
         <div className="mx-auto mt-2 h-1.5 max-w-xl overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Progreso de la sesión" aria-valuemin={0} aria-valuemax={prog.total} aria-valuenow={prog.done}>
           <div className="h-full bg-sage transition-all" style={{ width: `${prog.total ? (prog.done / prog.total) * 100 : 0}%` }} />
         </div>
+        {settings.voiceCommands && s.phase !== 'summary' ? (
+          <p className="mx-auto mt-1 max-w-xl text-center text-xs text-muted" aria-live="polite">
+            {listenState === 'listening'
+              ? 'Escuchando: “listo”, “pausa”, “siguiente”, “saltar”, “más tiempo”…'
+              : listenState === 'denied'
+                ? 'Micrófono bloqueado: actívalo en los ajustes del navegador.'
+                : listenState === 'unsupported'
+                  ? 'Este navegador no admite comandos de voz.'
+                  : 'Activando micrófono…'}
+          </p>
+        ) : null}
       </header>
 
       <main className="safe-bottom mx-auto flex w-full max-w-xl flex-1 flex-col px-4 py-4">
@@ -264,7 +344,7 @@ function Coach({
           <Warmup
             onDone={() => {
               unlockAudio();
-              commit({ ...s, phase: 'work' });
+              commit({ ...sRef.current, phase: 'work' });
             }}
             soundOn={soundOn}
             voiceOn={voiceOn}
@@ -303,32 +383,28 @@ function Coach({
               <div>
                 <p className="text-sm font-semibold text-sage-strong">
                   Ejercicio {s.exerciseIndex + 1} de {s.exercises.length}
+                  {ex.glute ? ' · glúteo' : ''}
                   {log.status === 'done' ? ' · completado' : log.status === 'skipped' ? ' · omitido' : ''}
                 </p>
                 <h1 className="font-display text-3xl font-semibold leading-tight">{name}</h1>
-                {log.substitute ? (
-                  <p className="text-sm text-muted">Sustituye a: {ex.nameEs}</p>
-                ) : (
-                  <p className="text-sm text-muted">{ex.name}</p>
-                )}
+                <p className="text-sm text-muted">{log.substitute ? `Sustituye a: ${ex.nameEs}` : ex.name}</p>
               </div>
               <ProgressRing value={log.sets.length / log.plannedSets} size={62} label={`Serie ${setNumber} de ${log.plannedSets}`}>
                 <span className="tabular text-sm font-bold">{Math.min(log.sets.length, log.plannedSets)}/{log.plannedSets}</span>
               </ProgressRing>
             </div>
 
-            {!log.substitute ? (
-              <ExerciseIllustration pattern={guide.pattern} label={ex.nameEs} className="aspect-[16/10]" />
-            ) : null}
+            {!log.substitute ? <ExerciseIllustration pattern={guide.pattern} label={ex.nameEs} className="aspect-[16/10]" /> : null}
 
             <div className="grid grid-cols-2 gap-2 text-center">
               <div className="rounded-2xl bg-surface-2 p-3">
                 <p className="text-xs text-muted">Objetivo</p>
-                <p className="font-semibold">{ex.timed ? `${ex.reps}` : `${ex.reps} reps`}</p>
+                <p className="font-semibold">{ex.timed ? ex.reps : `${ex.reps} reps`}</p>
+                <p className="text-xs text-muted">con {RIR_TARGET.min}–{RIR_TARGET.max} en reserva</p>
               </div>
               <div className="rounded-2xl bg-surface-2 p-3">
-                <p className="text-xs text-muted">Carga propuesta (ajustable)</p>
-                <p className="font-semibold">{formatLoad(log.substitute?.loadType === 'body' ? 0 : log.plannedLoadLb, loadType, settings.unit)}</p>
+                <p className="text-xs text-muted">Propuesta (si la técnica lo permite)</p>
+                <p className="font-semibold leading-tight">{formatOption(log.substitute ? { kind: 'body', lb: 0 } : plannedOptionOf(log), mode, settings.unit)}</p>
               </div>
             </div>
 
@@ -356,11 +432,12 @@ function Coach({
               key={`${s.exerciseIndex}-${log.sets.length}-${log.substitute?.id ?? ''}`}
               ex={ex}
               log={log}
-              loadType={loadType}
+              mode={mode}
               inventory={inventory}
               settings={settings}
               soundOn={soundOn}
               onComplete={completeSet}
+              registerSubmit={(fn) => (submitRef.current = fn)}
             />
 
             {log.sets.length > 0 ? (
@@ -369,8 +446,11 @@ function Coach({
                 <ul className="space-y-1">
                   {log.sets.map((st) => (
                     <li key={st.setNumber} className="tabular flex justify-between gap-2">
-                      <span>Serie {st.setNumber}: {st.reps} {ex.timed ? 's' : 'reps'} · {formatLoad(st.loadLb, loadType, settings.unit)}</span>
-                      <span className="text-muted">{st.pain ? 'dolor' : st.difficulty ? DIFFICULTY_LABELS[st.difficulty] : ''}</span>
+                      <span>
+                        Serie {st.setNumber}: {st.reps} {ex.timed && !log.substitute ? 's' : 'reps'} · {formatOptionShort(setOption(st), st.mode ?? mode, settings.unit)}
+                        {st.tempo === 'lento' ? ' · tempo lento' : ''}
+                      </span>
+                      <span className="text-muted">{st.pain ? 'dolor' : st.rir !== undefined && st.rir !== null ? `RIR ${rirLabel(st.rir)}` : ''}</span>
                     </li>
                   ))}
                 </ul>
@@ -391,7 +471,7 @@ function Coach({
                 ⤼ Omitir
               </Button>
             </nav>
-            <Button variant="ghost" onClick={() => goToSummary(s)}>
+            <Button variant="ghost" onClick={() => goToSummary(sRef.current)}>
               Terminar sesión ahora
             </Button>
           </div>
@@ -413,14 +493,33 @@ function Coach({
       {s.paused ? (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-bg/95 p-6 text-center backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="paused-title">
           <h2 id="paused-title" className="font-display text-4xl font-semibold">En pausa</h2>
-          <p className="max-w-xs text-muted">Tu progreso está guardado. Puedes cerrar la app y continuar más tarde desde Inicio.</p>
-          <Button size="xl" className="w-full max-w-xs" onClick={togglePause}>▶ Reanudar</Button>
+          <p className="max-w-xs text-muted">Tu progreso está guardado. Puedes cerrar la app y continuar más tarde desde Inicio.{settings.voiceCommands ? ' Di “seguir” para continuar.' : ''}</p>
+          <Button size="xl" className="w-full max-w-xs" onClick={() => setPaused(false)}>▶ Reanudar</Button>
           <Button variant="secondary" className="w-full max-w-xs" onClick={() => navigate('/')}>Guardar y salir</Button>
         </div>
       ) : null}
 
       <Modal open={showGuide} onClose={() => setShowGuide(false)} title={ex.nameEs}>
         <GuideContent exerciseId={ex.id} compact />
+      </Modal>
+
+      <Modal open={showVoiceHelp} onClose={() => setShowVoiceHelp(false)} title="Comandos de voz">
+        {speechRecognitionSupported() ? (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-muted">Con el micrófono activo puedes decir:</p>
+            <ul className="divide-y divide-line">
+              {COMMAND_HELP.map((c) => (
+                <li key={c.say} className="flex justify-between gap-3 py-2 text-sm">
+                  <strong>{c.say}</strong>
+                  <span className="text-right text-muted">{c.does}</span>
+                </li>
+              ))}
+            </ul>
+            <Notice>“Listo” registra la serie con los valores que tengas en pantalla. En iPhone el micrófono necesita permiso, deja de escuchar con la pantalla bloqueada y puede pausarse tras silencios largos (se reactiva solo).</Notice>
+          </div>
+        ) : (
+          <Notice tone="warn">Este navegador no admite reconocimiento de voz. Las indicaciones habladas y el temporizador siguen funcionando.</Notice>
+        )}
       </Modal>
 
       <Modal open={showSubstitute} onClose={() => setShowSubstitute(false)} title="Sustituir ejercicio">
@@ -448,9 +547,9 @@ function Coach({
         title="Detén el ejercicio"
         footer={
           <div className="grid gap-2">
-            <Button variant="primary" onClick={() => { setPainOpen(false); skipExercise(); }}>Omitir este ejercicio</Button>
+            <Button onClick={() => { setPainOpen(false); skipExercise(); }}>Omitir este ejercicio</Button>
             <Button variant="secondary" onClick={() => { setPainOpen(false); setShowSubstitute(true); }}>Elegir una alternativa</Button>
-            <Button variant="danger" onClick={() => { setPainOpen(false); goToSummary(s); }}>Terminar la sesión</Button>
+            <Button variant="danger" onClick={() => { setPainOpen(false); goToSummary(sRef.current); }}>Terminar la sesión</Button>
           </div>
         }
       >
@@ -481,28 +580,46 @@ function Coach({
 function SetLogger({
   ex,
   log,
-  loadType,
+  mode: baseMode,
   inventory,
   settings,
   soundOn,
   onComplete,
+  registerSubmit,
 }: {
-  ex: PlanExercise;
+  ex: Exercise;
   log: ExerciseLog;
-  loadType: LoadType;
+  mode: Mode;
   inventory: InventoryItem[];
   settings: Settings;
   soundOn: boolean;
   onComplete: (e: Omit<SetLog, 'setNumber' | 'completedAt'>) => void;
+  registerSubmit: (fn: () => void) => void;
 }) {
   const last = log.sets[log.sets.length - 1];
-  const options = useMemo(() => [0, ...availableLoadsLb(inventory, loadType, ex.unilateral)], [inventory, loadType, ex.unilateral]);
-  const initialLoad = loadType === 'body' ? 0 : last?.loadLb ?? log.plannedLoadLb;
-  const [loadLb, setLoadLb] = useState(initialLoad);
+  const [mode, setMode] = useState<Mode>(last?.mode ?? baseMode);
+  // En el registro se permite cualquier opción real: peso corporal, alternativas ligeras y mancuernas fijas.
+  const ladder = useMemo(() => ladderFor({ mode, allowBody: true, allowLight: true }, inventory), [mode, inventory]);
+  const initial: LoadOption = last ? setOption(last) : log.substitute ? { kind: 'body', lb: 0 } : plannedOptionOf(log);
+  const [option, setOptionState] = useState<LoadOption>(() => nearestAtOrBelow(ladder, initial) ?? { kind: 'body', lb: 0 });
   const [reps, setReps] = useState(last?.reps ?? ex.repsMax);
-  const [difficulty, setDifficulty] = useState<Difficulty | null>(null);
+  const [rir, setRir] = useState<number | null>(null);
+  const [tempo, setTempo] = useState<Tempo>(last?.tempo ?? 'normal');
   const [pain, setPain] = useState(false);
   const [techniqueOk, setTechniqueOk] = useState(true);
+  const timedMain = ex.timed && !log.substitute;
+
+  // Si cambia la sujeción, ajustar la carga a una opción válida.
+  useEffect(() => {
+    if (optionIndex(ladder, option) === -1) setOptionState(nearestAtOrBelow(ladder, option) ?? ladder[0]);
+  }, [ladder, option]);
+
+  const entry = { reps, option, loadLb: option.kind === 'body' ? 0 : option.lb, rir, tempo, mode: mode !== baseMode ? mode : undefined, pain, techniqueOk };
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
+  useEffect(() => {
+    registerSubmit(() => onComplete(entryRef.current));
+  }, [registerSubmit, onComplete]);
 
   // Cronómetro para ejercicios por tiempo
   const [hold, setHold] = useState<TimerState | null>(null);
@@ -525,93 +642,107 @@ function SetLogger({
   }, [holdNow, hold, soundOn, settings.vibration]);
 
   const stepLoad = (dir: 1 | -1) => {
-    const idx = options.findIndex((o) => Math.abs(o - loadLb) < 0.01);
-    if (idx === -1) {
-      const nearest = dir === 1 ? options.find((o) => o > loadLb) : [...options].reverse().find((o) => o < loadLb);
-      if (nearest !== undefined) setLoadLb(nearest);
-      return;
-    }
-    const n = options[idx + dir];
-    if (n !== undefined) setLoadLb(n);
+    const idx = optionIndex(ladder, option);
+    const n = ladder[(idx === -1 ? 0 : idx) + dir];
+    if (n) setOptionState(n);
   };
-
   const holdElapsedSec = hold ? Math.round((hold.durationMs - remainingMs(hold, holdNow)) / 1000) : 0;
+  const planned = plannedOptionOf(log);
+  const aboveProposal = !log.substitute && compareOptions(option, planned) > 0;
 
   return (
     <div className="flex flex-col gap-4 rounded-3xl border border-line bg-surface p-4">
-      <p className="font-semibold">Registrar serie {Math.min(log.sets.length + 1, Math.max(log.plannedSets, log.sets.length + 1))}</p>
+      <p className="font-semibold">Registrar serie {log.sets.length + 1}</p>
 
-      {loadType !== 'body' ? (
-        <Stepper
-          label={loadType === 'each' ? 'Peso por mano' : 'Peso total'}
-          value={loadLb}
-          display={loadLb > 0 ? formatWeight(loadLb, settings.unit) : 'Sin peso'}
-          onDec={() => stepLoad(-1)}
-          onInc={() => stepLoad(1)}
-        />
-      ) : null}
-      {loadType !== 'body' && options.length <= 1 ? (
-        <Notice tone="warn">No tienes mancuernas registradas para este ejercicio. Añádelas en Ajustes → Inventario o hazlo sin peso.</Notice>
-      ) : null}
-
-      {ex.timed && !log.substitute ? (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-center gap-3">
-            <Button
-              variant={hold?.status === 'running' ? 'secondary' : 'soft'}
-              className="flex-1"
-              onClick={() => {
-                unlockAudio();
-                const t = Date.now();
-                if (!hold || hold.status === 'done' || hold.status === 'idle') {
-                  prevHold.current = null;
-                  setHold(start(createTimer(ex.repsMax), t));
-                } else if (hold.status === 'running') {
-                  setHold(pause(hold, t));
-                  setReps(Math.max(1, holdElapsedSec));
-                } else setHold(resume(hold, t));
-              }}
-            >
-              {hold?.status === 'running' ? '⏸ Parar cronómetro' : hold?.status === 'paused' ? '▶ Continuar' : `⏱ Iniciar ${ex.repsMax} s`}
-            </Button>
-            <span className="tabular w-20 text-center font-display text-3xl font-semibold" aria-live="off">
-              {hold ? formatClock(remainingMs(hold, holdNow)) : `0:${String(ex.repsMax).padStart(2, '0')}`}
-            </span>
+      {baseMode !== 'body' ? (
+        <>
+          <fieldset>
+            <legend className="mb-2 text-sm font-medium text-muted">Cómo sujetas la carga</legend>
+            <div className="flex flex-wrap gap-2">
+              {(['held', 'each', 'one'] as const).map((m) => (
+                <Chip key={m} selected={mode === m} onClick={() => setMode(m)} className="px-3">
+                  {MODE_LABELS[m]}
+                </Chip>
+              ))}
+            </div>
+          </fieldset>
+          <div>
+            <Stepper
+              label={mode === 'each' ? 'Carga real (por mano)' : mode === 'one' ? 'Carga real (en una mano)' : 'Carga real (total)'}
+              value={option.lb}
+              display={option.kind === 'body' ? 'Peso corporal' : option.kind === 'light' ? option.label ?? 'Ligera' : formatOptionShort(option, mode, settings.unit)}
+              onDec={() => stepLoad(-1)}
+              onInc={() => stepLoad(1)}
+            />
+            <p className="mt-1 text-center text-sm text-muted">{formatOption(option, mode, settings.unit)}</p>
+            {sameOption(option, planned) && !log.substitute ? <p className="text-center text-xs font-semibold text-sage-strong">= propuesta de hoy</p> : null}
+            {aboveProposal ? (
+              <p className="mt-1 text-center text-xs text-warn">Por encima de la propuesta: úsala solo si mantienes la técnica y {RIR_TARGET.min}–{RIR_TARGET.max} RIR.</p>
+            ) : null}
           </div>
+        </>
+      ) : null}
+
+      {timedMain ? (
+        <div className="flex items-center gap-3">
+          <Button
+            variant={hold?.status === 'running' ? 'secondary' : 'soft'}
+            className="flex-1"
+            onClick={() => {
+              unlockAudio();
+              const t = Date.now();
+              if (!hold || hold.status === 'done' || hold.status === 'idle') {
+                prevHold.current = null;
+                setHold(start(createTimer(ex.repsMax), t));
+              } else if (hold.status === 'running') {
+                setHold(pause(hold, t));
+                setReps(Math.max(1, holdElapsedSec));
+              } else setHold(resume(hold, t));
+            }}
+          >
+            {hold?.status === 'running' ? '⏸ Parar cronómetro' : hold?.status === 'paused' ? '▶ Continuar' : `⏱ Iniciar ${ex.repsMax} s`}
+          </Button>
+          <span className="tabular w-20 text-center font-display text-3xl font-semibold" aria-live="off">
+            {hold ? formatClock(remainingMs(hold, holdNow)) : formatClock(ex.repsMax * 1000)}
+          </span>
         </div>
       ) : null}
 
       <Stepper
-        label={ex.timed && !log.substitute ? 'Segundos logrados' : ex.perSide ? 'Repeticiones por lado' : 'Repeticiones'}
+        label={timedMain ? 'Segundos logrados' : ex.perSide ? 'Repeticiones por lado' : 'Repeticiones'}
         value={reps}
         onDec={() => setReps((r) => Math.max(0, r - 1))}
         onInc={() => setReps((r) => r + 1)}
       />
 
-      {settings.askDifficulty ? (
+      {settings.askRir ? (
         <fieldset>
-          <legend className="mb-2 text-sm font-medium text-muted">¿Cómo se sintió? (opcional)</legend>
-          <div className="grid grid-cols-3 gap-2">
-            {(['easy', 'ok', 'hard'] as const).map((d) => (
-              <Chip key={d} selected={difficulty === d} onClick={() => setDifficulty(difficulty === d ? null : d)} className="px-2">
-                {DIFFICULTY_LABELS[d]}
+          <legend className="mb-1 text-sm font-medium text-muted">Repeticiones en reserva (RIR)</legend>
+          <p className="mb-2 text-xs text-muted">¿Cuántas más podrías haber hecho con buena técnica? Objetivo: {RIR_TARGET.min}–{RIR_TARGET.max}.</p>
+          <div className="grid grid-cols-5 gap-2">
+            {RIR_OPTIONS.map((r) => (
+              <Chip
+                key={r}
+                selected={rir === r}
+                onClick={() => setRir(rir === r ? null : r)}
+                className={`px-0 ${r >= RIR_TARGET.min && r <= RIR_TARGET.max && rir !== r ? 'border-sage' : ''}`}
+                aria-label={`${rirLabel(r)} repeticiones en reserva${r >= RIR_TARGET.min && r <= RIR_TARGET.max ? ' (objetivo)' : ''}`}
+              >
+                {rirLabel(r)}
               </Chip>
             ))}
           </div>
+          {rir !== null && rir <= 1 ? <p className="mt-1 text-xs text-warn">Muy cerca del fallo: en la siguiente serie haz 1–2 repeticiones menos o baja la carga.</p> : null}
         </fieldset>
       ) : null}
 
       <div className="divide-y divide-line rounded-2xl bg-surface-2 px-3">
+        <Toggle checked={tempo === 'lento'} onChange={(v) => setTempo(v ? 'lento' : 'normal')} label="Tempo lento" description="3 s al bajar y 1 s de pausa: progresión sin subir peso" />
         <Toggle checked={techniqueOk} onChange={setTechniqueOk} label="Técnica adecuada" description="Movimiento controlado y en buena postura" />
         <Toggle checked={pain} onChange={setPain} label="Sentí dolor o molestia" description="Te indicaremos parar" />
       </div>
 
-      <Button
-        size="xl"
-        className="w-full"
-        variant={pain ? 'danger' : 'primary'}
-        onClick={() => onComplete({ reps, loadLb: loadType === 'body' ? 0 : loadLb, difficulty, pain, techniqueOk })}
-      >
+      <Button size="xl" className="w-full" variant={pain ? 'danger' : 'primary'} onClick={() => onComplete(entry)}>
         {pain ? 'Registrar y parar' : '✓ Completar serie'}
       </Button>
     </div>
@@ -695,23 +826,16 @@ function Summary({ session: s, commit, settings, inventory }: { session: Workout
   const sessions = useSessions();
   const adjustments = useAdjustments();
   const [notes, setNotes] = useState(s.notes ?? '');
-  const [approved, setApproved] = useState<Record<string, number>>({});
+  const [decided, setDecided] = useState<Record<string, LoadOption | null>>({});
 
   if (!sessions || !adjustments) return <Loading />;
   const merged = sessions.map((x) => (x.id === s.id ? s : x));
   if (!merged.some((x) => x.id === s.id)) merged.push(s);
 
-  const approve = async (exId: string, toLb: number, reason: string) => {
-    const plan = findPlanExercise(exId)!;
-    await db.adjustments.add({
-      exerciseId: exId,
-      createdAt: new Date().toISOString(),
-      deltaLb: toLb - plannedLoadLb(plan, s.week),
-      approvedLb: toLb,
-      reason,
-    });
-    setApproved((a) => ({ ...a, [exId]: toLb }));
-    toast(`Nueva propuesta para ${plan.nameEs}: ${formatWeight(toLb, settings.unit)}`);
+  const approve = async (ex: Exercise, option: LoadOption, reason: string) => {
+    await db.adjustments.add({ exerciseId: ex.id, createdAt: new Date().toISOString(), option, reason });
+    setDecided((a) => ({ ...a, [ex.id]: option }));
+    toast(`Nueva propuesta para ${ex.nameEs}: ${formatOptionShort(option, ex.mode, settings.unit)}`);
   };
 
   const finish = () => {
@@ -721,27 +845,33 @@ function Summary({ session: s, commit, settings, inventory }: { session: Workout
   };
 
   const totalSets = s.exercises.reduce((a, e) => a + e.sets.length, 0);
-  const minutes = Math.max(1, Math.round((Date.now() - new Date(s.startedAt).getTime()) / 60000));
+  const minutes = Math.max(1, Math.round(((s.endedAt ? new Date(s.endedAt).getTime() : Date.now()) - new Date(s.startedAt).getTime()) / 60000));
+  const gluteSets = s.exercises.filter((e) => !e.substitute && getExercise(e.exerciseId)?.glute).reduce((a, e) => a + e.sets.length, 0);
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="font-display text-3xl font-semibold">Resumen</h1>
-      <div className="grid grid-cols-2 gap-2 text-center">
-        <div className="rounded-2xl bg-sage-soft p-3">
-          <p className="tabular text-2xl font-bold">{totalSets}</p>
-          <p className="text-sm text-muted">series</p>
-        </div>
-        <div className="rounded-2xl bg-sage-soft p-3">
-          <p className="tabular text-2xl font-bold">{s.endedAt ? Math.round((new Date(s.endedAt).getTime() - new Date(s.startedAt).getTime()) / 60000) : minutes}</p>
-          <p className="text-sm text-muted">minutos</p>
-        </div>
+      <div className="grid grid-cols-3 gap-2 text-center">
+        {[
+          [totalSets, 'series'],
+          [gluteSets, 'de glúteo'],
+          [minutes, 'minutos'],
+        ].map(([v, l]) => (
+          <div key={l} className="rounded-2xl bg-sage-soft p-3">
+            <p className="tabular text-2xl font-bold">{v}</p>
+            <p className="text-sm text-muted">{l}</p>
+          </div>
+        ))}
       </div>
 
-      <Notice>Las sugerencias no cambian nada por sí solas: solo se aplican si las apruebas. Las cargas son referencias que adaptas a tu capacidad real.</Notice>
+      <Notice>
+        Solo se recomienda subir peso tras dos sesiones seguidas con todas las series, buena técnica y {RIR_TARGET.min}–{RIR_TARGET.max} repeticiones en reserva. Nada cambia sin tu aprobación.
+      </Notice>
 
       <ul className="flex flex-col gap-3">
         {s.exercises.map((log) => {
-          const ex = findPlanExercise(log.exerciseId)!;
+          const ex = getExercise(log.exerciseId)!;
+          const mode = modeOfLog(log, ex);
           if (log.status === 'skipped' || log.sets.length === 0)
             return (
               <li key={log.exerciseId} className="rounded-2xl border border-line bg-surface p-3">
@@ -749,49 +879,42 @@ function Summary({ session: s, commit, settings, inventory }: { session: Workout
                 <p className="text-sm text-muted">{log.status === 'skipped' ? 'Omitido' : 'Sin registrar'}</p>
               </li>
             );
+          const ladder = ladderFor(ex, inventory);
           let sug: Suggestion | null = null;
-          if (!log.substitute) {
-            const history = exerciseHistory(merged, ex.id);
-            const current = Math.max(...log.sets.map((x) => x.loadLb));
-            sug = suggestProgression({
-              history,
-              currentLoadLb: current,
-              loadType: ex.loadType,
-              available: availableLoadsLb(inventory, ex.loadType, ex.unilateral),
-              repsMax: ex.repsMax,
-              timed: ex.timed,
-            });
-          }
-          const usedMax = Math.max(...log.sets.map((x) => x.loadLb));
-          const changedLoad = ex.loadType !== 'body' && !log.substitute && Math.abs(usedMax - log.plannedLoadLb) > 0.01 && sug?.kind !== 'stop_pain';
-          const isApproved = approved[ex.id] !== undefined;
+          if (!log.substitute) sug = suggestProgression({ history: exerciseHistory(merged, ex.id), ex, ladder, unit: settings.unit });
+          const hist = exerciseHistory([s], ex.id);
+          const used = !log.substitute && hist.length ? topOption(hist[0]) : undefined;
+          const planned = plannedOptionOf(log);
+          const changed = used && !sameOption(used, planned) && sug?.kind !== 'stop_pain' && optionIndex(ladder, used) !== -1;
+          const done = ex.id in decided;
           return (
             <li key={log.exerciseId} className="rounded-2xl border border-line bg-surface p-3">
               <p className="font-semibold">{exerciseName(log)}</p>
               <p className="tabular text-sm text-muted">
-                {log.sets.map((x) => `${x.reps}${ex.timed ? 's' : ''}`).join(' · ')} {ex.loadType !== 'body' && !log.substitute ? `— ${formatLoad(usedMax, ex.loadType, settings.unit)}` : ''}
+                {log.sets.length}/{log.plannedSets} series · {log.sets.map((x) => `${x.reps}${ex.timed && !log.substitute ? 's' : ''}${x.rir !== undefined && x.rir !== null ? ` (RIR ${rirLabel(x.rir)})` : ''}`).join(' · ')}
               </p>
+              {used && mode !== 'body' ? <p className="text-sm text-muted">{formatOption(used, mode, settings.unit)}</p> : null}
               {sug ? (
                 <div className="mt-2">
-                  <Notice tone={sug.kind === 'stop_pain' ? 'danger' : sug.kind === 'increase' ? 'success' : sug.kind === 'decrease' || sug.kind === 'decrease_reps' ? 'warn' : 'info'}>
-                    {sug.message}
-                  </Notice>
-                  {(sug.kind === 'increase' || sug.kind === 'decrease') && !isApproved ? (
+                  <Notice tone={sug.kind === 'stop_pain' ? 'danger' : sug.kind === 'increase' ? 'success' : sug.kind === 'decrease' ? 'warn' : 'info'}>{sug.message}</Notice>
+                  {(sug.kind === 'increase' || sug.kind === 'decrease') && !done ? (
                     <div className="mt-2 flex gap-2">
-                      <Button size="sm" className="flex-1" onClick={() => approve(ex.id, sug.toLb, sug.kind === 'increase' ? 'Dos sesiones fáciles' : 'Sesión demasiado difícil')}>
-                        Aprobar {formatWeight(sug.toLb, settings.unit)}
+                      <Button size="sm" className="flex-1" onClick={() => approve(ex, sug.to, sug.kind === 'increase' ? 'Criterio RIR cumplido dos sesiones' : 'Sin reserva y por debajo del mínimo')}>
+                        Aprobar {formatOptionShort(sug.to, ex.mode, settings.unit)}
                       </Button>
-                      <Button size="sm" variant="secondary" onClick={() => setApproved((a) => ({ ...a, [ex.id]: -1 }))}>No, mantener</Button>
+                      <Button size="sm" variant="secondary" onClick={() => setDecided((a) => ({ ...a, [ex.id]: null }))}>
+                        {sug.kind === 'increase' ? 'Seguir con reps/tempo' : 'Mantener'}
+                      </Button>
                     </div>
                   ) : null}
                 </div>
               ) : null}
-              {changedLoad && !isApproved ? (
-                <Button size="sm" variant="ghost" className="mt-1" onClick={() => approve(ex.id, usedMax, 'Carga usada por la persona')}>
-                  Usar {formatWeight(usedMax, settings.unit)} como nueva propuesta
+              {changed && !done ? (
+                <Button size="sm" variant="ghost" className="mt-1" onClick={() => approve(ex, used!, 'Carga usada por la persona')}>
+                  Usar {formatOptionShort(used!, ex.mode, settings.unit)} como próxima propuesta
                 </Button>
               ) : null}
-              {isApproved && approved[ex.id] > 0 ? <p className="mt-2 text-sm font-semibold text-sage-strong">✓ Propuesta actualizada a {formatWeight(approved[ex.id], settings.unit)}</p> : null}
+              {done && decided[ex.id] ? <p className="mt-2 text-sm font-semibold text-sage-strong">✓ Próxima propuesta: {formatOptionShort(decided[ex.id]!, ex.mode, settings.unit)}</p> : null}
             </li>
           );
         })}

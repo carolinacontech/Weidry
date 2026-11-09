@@ -31,6 +31,7 @@ import {
 import type { Settings } from '../lib/types';
 import { DEFAULT_INVENTORY, formatWeight, itemLb, type InventoryItem, type Unit } from '../lib/weights';
 import { uid } from '../lib/session';
+import { speechRecognitionSupported } from '../lib/voiceCommands';
 import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, Toggle, inputClass, useToast } from './ui';
 
 function Section({ title, children, id }: { title: string; children: ReactNode; id: string }) {
@@ -65,7 +66,7 @@ export function SettingsView() {
       <nav aria-label="Secciones de ajustes" className="mb-4 flex flex-wrap gap-2 text-sm">
         {[
           ['s-perfil', 'Perfil'],
-          ['s-inv', 'Mancuernas'],
+          ['s-inv', 'Equipamiento'],
           ['s-entreno', 'Entreno y sonido'],
           ['s-rec', 'Recordatorios'],
           ['s-apar', 'Apariencia'],
@@ -146,6 +147,7 @@ function ProfileSection({ profile }: { profile: Profile }) {
           )}
         </Field>
         <Field label="Condiciones a tener en cuenta">{(id) => <input id={id} className={inputClass} value={p.conditions} onChange={(e) => setP({ ...p, conditions: e.target.value })} />}</Field>
+        <Toggle checked={p.showWeightGoal} onChange={(v) => setP({ ...p, showWeightGoal: v })} label="Mostrar peso objetivo" description="Desactivado por defecto: la prioridad es fuerza y glúteos" />
         <Toggle checked={p.showAestheticReference} onChange={(v) => setP({ ...p, showAestheticReference: v })} label="Mostrar referencia estética en gráficos" description="Solo como referencia personal" />
       </div>
       <div className="mt-3 flex gap-2">
@@ -169,52 +171,56 @@ function InventorySection({ inventory, unit, onUnit }: { inventory: InventoryIte
   const [value, setValue] = useState('');
   const [newUnit, setNewUnit] = useState<Unit>(unit);
   const [count, setCount] = useState(2);
-  const sorted = [...inventory].sort((a, b) => itemLb(a) - itemLb(b));
+  const [lightLabel, setLightLabel] = useState('');
+  const [lightValue, setLightValue] = useState('');
+  const fixed = inventory.filter((i) => i.kind === 'fixed').sort((a, b) => itemLb(a) - itemLb(b));
+  const light = inventory.filter((i) => i.kind === 'light').sort((a, b) => itemLb(a) - itemLb(b));
+  const save = (items: InventoryItem[]) => setInventory(items);
 
-  const save = async (items: InventoryItem[]) => {
-    await setInventory(items);
-  };
+  const row = (it: InventoryItem) => (
+    <li key={it.id} className="flex items-center justify-between gap-2 py-2">
+      <div className="min-w-0">
+        <p className="tabular font-semibold">
+          {it.kind === 'light' ? `${it.label ?? 'Alternativa ligera'} · ≈ ${it.value} ${it.unit}` : `${it.value} ${it.unit} por mancuerna`}
+          {it.unit !== unit ? <span className="ml-1 text-sm font-normal text-muted">(≈ {formatWeight(itemLb(it), unit)})</span> : null}
+        </p>
+        <p className="text-sm text-muted">{it.count === 1 ? '1 unidad: solo para ejercicios con una mancuerna' : `${it.count} unidades${it.count >= 2 ? ' (sirve para una en cada mano)' : ''}`}</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-1">
+        <button type="button" className="h-11 w-11 rounded-xl border border-line text-lg" aria-label={`Quitar una unidad de ${it.label ?? `${it.value} ${it.unit}`}`} onClick={() => save(inventory.map((x) => (x.id === it.id ? { ...x, count: Math.max(1, x.count - 1) } : x)))}>−</button>
+        <span className="tabular w-6 text-center">{it.count}</span>
+        <button type="button" className="h-11 w-11 rounded-xl border border-line text-lg" aria-label={`Añadir una unidad de ${it.label ?? `${it.value} ${it.unit}`}`} onClick={() => save(inventory.map((x) => (x.id === it.id ? { ...x, count: Math.min(9, x.count + 1) } : x)))}>+</button>
+        <button
+          type="button"
+          className="ml-1 h-11 rounded-xl px-2 text-sm text-danger"
+          onClick={async () => {
+            await save(inventory.filter((x) => x.id !== it.id));
+            toast('Eliminado del inventario', 'info');
+          }}
+          aria-label={`Eliminar ${it.label ?? `${it.value} ${it.unit}`}`}
+        >
+          Eliminar
+        </button>
+      </div>
+    </li>
+  );
 
   return (
-    <Section title="Mis mancuernas" id="s-inv">
-      <p className="mb-3 text-sm text-muted">La app solo propone cargas que tienes. Si te falta un peso, usará el inmediatamente inferior y te sugerirá más repeticiones en lugar de forzar saltos.</p>
+    <Section title="Mi equipamiento" id="s-inv">
+      <p className="mb-3 text-sm text-muted">
+        La app solo propone cargas que existen aquí. Nunca recomendará una mancuerna que no tengas. Si un salto es demasiado grande (por ejemplo de 10 a 15 lb), te propondrá progresar con repeticiones, tempo o series.
+      </p>
       <div className="mb-3 flex items-center gap-2" role="group" aria-label="Unidad para mostrar cargas">
         <span className="text-sm font-medium text-muted">Mostrar en:</span>
         <Chip selected={unit === 'lb'} onClick={() => onUnit('lb')}>lb</Chip>
         <Chip selected={unit === 'kg'} onClick={() => onUnit('kg')}>kg</Chip>
       </div>
-      {sorted.length === 0 ? <Notice tone="warn">No hay mancuernas registradas: todos los ejercicios se propondrán sin peso.</Notice> : null}
-      <ul className="divide-y divide-line">
-        {sorted.map((it) => (
-          <li key={it.id} className="flex items-center justify-between gap-2 py-2">
-            <div>
-              <p className="tabular font-semibold">
-                {it.value} {it.unit}
-                {it.unit !== unit ? <span className="ml-1 text-sm font-normal text-muted">(≈ {formatWeight(itemLb(it), unit)})</span> : null}
-              </p>
-              <p className="text-sm text-muted">{it.count === 1 ? '1 mancuerna' : `${it.count} mancuernas${it.count >= 2 ? ' (par)' : ''}`}</p>
-            </div>
-            <div className="flex items-center gap-1">
-              <button type="button" className="h-11 w-11 rounded-xl border border-line text-lg" aria-label={`Quitar una de ${it.value} ${it.unit}`} onClick={() => save(inventory.map((x) => (x.id === it.id ? { ...x, count: Math.max(1, x.count - 1) } : x)))}>−</button>
-              <span className="tabular w-6 text-center">{it.count}</span>
-              <button type="button" className="h-11 w-11 rounded-xl border border-line text-lg" aria-label={`Añadir una de ${it.value} ${it.unit}`} onClick={() => save(inventory.map((x) => (x.id === it.id ? { ...x, count: Math.min(9, x.count + 1) } : x)))}>+</button>
-              <button
-                type="button"
-                className="ml-1 h-11 rounded-xl px-2 text-sm text-danger"
-                onClick={async () => {
-                  await save(inventory.filter((x) => x.id !== it.id));
-                  toast(`${it.value} ${it.unit} eliminado`, 'info');
-                }}
-                aria-label={`Eliminar ${it.value} ${it.unit}`}
-              >
-                Eliminar
-              </button>
-            </div>
-          </li>
-        ))}
-      </ul>
-      <div className="mt-3 grid grid-cols-[1fr_auto_auto] items-end gap-2">
-        <Field label="Añadir peso">{(id) => <input id={id} className={inputClass} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="p. ej. 8" />}</Field>
+
+      <h3 className="mt-2 font-semibold">Mancuernas fijas</h3>
+      {fixed.length === 0 ? <Notice tone="warn">No hay mancuernas registradas: se propondrán peso corporal y alternativas ligeras.</Notice> : null}
+      <ul className="divide-y divide-line">{fixed.map(row)}</ul>
+      <div className="mt-2 grid grid-cols-[1fr_auto_auto] items-end gap-2">
+        <Field label="Peso por mancuerna">{(id) => <input id={id} className={inputClass} inputMode="decimal" value={value} onChange={(e) => setValue(e.target.value)} placeholder="p. ej. 25" />}</Field>
         <div className="flex gap-1 pb-0.5">
           <Chip selected={newUnit === 'lb'} onClick={() => setNewUnit('lb')}>lb</Chip>
           <Chip selected={newUnit === 'kg'} onClick={() => setNewUnit('kg')}>kg</Chip>
@@ -227,27 +233,45 @@ function InventorySection({ inventory, unit, onUnit }: { inventory: InventoryIte
           )}
         </Field>
       </div>
-      <div className="mt-2 flex gap-2">
-        <Button
-          className="flex-1"
-          onClick={async () => {
-            const v = Number(value.replace(',', '.'));
-            if (!Number.isFinite(v) || v <= 0 || v > 200) {
-              toast('Introduce un peso válido', 'error');
-              return;
-            }
-            const existing = inventory.find((x) => x.unit === newUnit && Math.abs(x.value - v) < 0.01);
-            if (existing) await save(inventory.map((x) => (x.id === existing.id ? { ...x, count } : x)));
-            else await save([...inventory, { id: uid(), value: v, unit: newUnit, count }]);
-            setValue('');
-            toast(`${v} ${newUnit} añadido`);
-          }}
-        >
-          Añadir
-        </Button>
-        <Button variant="ghost" onClick={() => save(DEFAULT_INVENTORY)}>Inventario de ejemplo</Button>
+      <Button
+        className="mt-2 w-full"
+        variant="secondary"
+        onClick={async () => {
+          const v = Number(value.replace(',', '.'));
+          if (!Number.isFinite(v) || v <= 0 || v > 200) return toast('Introduce un peso válido', 'error');
+          const existing = inventory.find((x) => x.kind === 'fixed' && x.unit === newUnit && Math.abs(x.value - v) < 0.01);
+          if (existing) await save(inventory.map((x) => (x.id === existing.id ? { ...x, count } : x)));
+          else await save([...inventory, { id: uid(), kind: 'fixed', value: v, unit: newUnit, count }]);
+          setValue('');
+          toast(`${v} ${newUnit} añadido`);
+        }}
+      >
+        Añadir mancuerna
+      </Button>
+
+      <h3 className="mt-5 font-semibold">Alternativas ligeras</h3>
+      <p className="mb-1 text-sm text-muted">Botellas de agua u objetos domésticos para elevaciones laterales, tríceps, hombros o bíceps cuando 10 lb es demasiado.</p>
+      <ul className="divide-y divide-line">{light.map(row)}</ul>
+      <div className="mt-2 grid grid-cols-[1fr_6rem] items-end gap-2">
+        <Field label="Nombre">{(id) => <input id={id} className={inputClass} value={lightLabel} onChange={(e) => setLightLabel(e.target.value)} placeholder="Botella 2 L" />}</Field>
+        <Field label="Peso (lb)">{(id) => <input id={id} className={inputClass} inputMode="decimal" value={lightValue} onChange={(e) => setLightValue(e.target.value)} placeholder="4.4" />}</Field>
       </div>
-      <p className="mt-2 text-xs text-muted">Para ejercicios “por mano” se necesita un par (2), salvo el remo a una mano.</p>
+      <Button
+        className="mt-2 w-full"
+        variant="secondary"
+        onClick={async () => {
+          const v = Number(lightValue.replace(',', '.'));
+          if (!lightLabel.trim() || !Number.isFinite(v) || v <= 0 || v > 15) return toast('Indica un nombre y un peso entre 0 y 15 lb', 'error');
+          await save([...inventory, { id: uid(), kind: 'light', label: lightLabel.trim(), value: v, unit: 'lb', count: 2 }]);
+          setLightLabel('');
+          setLightValue('');
+          toast(`${lightLabel.trim()} añadida`);
+        }}
+      >
+        Añadir alternativa ligera
+      </Button>
+      <p className="mt-2 text-xs text-muted">Referencia: 500 ml de agua ≈ 1,1 lb · 1 L ≈ 2,2 lb · 1,5 L ≈ 3,3 lb · 2 L ≈ 4,4 lb.</p>
+      <Button variant="ghost" className="mt-2 w-full" onClick={() => save(DEFAULT_INVENTORY)}>Restablecer equipamiento (10, 15 y 20 lb + botellas)</Button>
     </Section>
   );
 }
@@ -264,7 +288,14 @@ function TrainingSection({ settings, set }: { settings: Settings; set: (p: Parti
       </div>
       <p className="mb-2 text-xs text-muted">“Recomendado” usa 60–90 s según el ejercicio y 120 s en los más intensos (peso muerto rumano).</p>
       <div className="divide-y divide-line">
-        <Toggle checked={settings.askDifficulty} onChange={(v) => set({ askDifficulty: v })} label="Preguntar dificultad en cada serie" description="Fácil / adecuada / demasiado difícil (opcional)" />
+        <Toggle checked={settings.askRir} onChange={(v) => set({ askRir: v })} label="Registrar repeticiones en reserva (RIR)" description="Necesario para las sugerencias de subir peso (objetivo 2–3)" />
+        <Toggle
+          checked={settings.voiceCommands}
+          onChange={(v) => set({ voiceCommands: v })}
+          label="Comandos de voz manos libres"
+          description={speechRecognitionSupported() ? '“Listo”, “pausa”, “seguir”, “siguiente”, “saltar”, “más tiempo”, “repite”' : 'Este navegador no admite reconocimiento de voz'}
+          disabled={!speechRecognitionSupported()}
+        />
         <Toggle checked={settings.sound} onChange={(v) => { if (v) { unlockAudio(); beep(); } set({ sound: v }); }} label="Sonidos" description="Pitidos 3-2-1 y fin de descanso" />
         <Toggle
           checked={settings.voice}
@@ -511,6 +542,7 @@ function LimitationsSection() {
         <li><strong>Audio y voz:</strong> iOS solo permite sonido después de que toques la pantalla; por eso se activan al pulsar “Empezar”. El interruptor de silencio del iPhone puede silenciar los pitidos.</li>
         <li><strong>Segundo plano:</strong> si bloqueas la pantalla o cambias de app, iOS pausa la web: los avisos de sonido o voz pueden no sonar. El temporizador usa la hora real, así que al volver muestra el tiempo correcto. No se garantiza audio en segundo plano.</li>
         <li><strong>Pantalla encendida:</strong> se usa Wake Lock donde existe (Safari 16.4+; en la app instalada, iOS 18.4+). Si no funciona, ajusta Ajustes → Pantalla → Bloqueo automático.</li>
+        <li><strong>Comandos de voz:</strong> usan el reconocimiento de voz del navegador (en Safari puede enviar el audio a los servidores de Apple para procesarlo). Necesitan permiso de micrófono, solo escuchan con la app en pantalla y pueden detenerse tras silencios largos; la app los reactiva sola. Con ruido fuerte pueden fallar: los botones siempre funcionan.</li>
         <li><strong>Vibración:</strong> Safari en iPhone no permite vibrar desde una web; solo funciona en Android.</li>
         <li><strong>Notificaciones:</strong> en iPhone requieren instalar la app (iOS 16.4+) y dar permiso. Sin servidor push no se pueden programar a una hora exacta con la app cerrada.</li>
         <li><strong>Almacenamiento:</strong> Safari puede borrar datos de webs no usadas durante semanas si no está instalada. Instálala y exporta copias.</li>

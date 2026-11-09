@@ -13,7 +13,7 @@ export function Onboarding() {
       <h1 className="font-display text-4xl font-semibold leading-tight">Hola, bienvenida a Mi Entrenamiento</h1>
       <p className="text-lg text-muted">Un programa de fuerza de 13 semanas, guiado serie a serie, que empieza el {formatLong(PROGRAM_START).toLowerCase()}.</p>
       <ul className="flex flex-col gap-2">
-        {['4 días de fuerza (A, B, C, D) + 2 de cardio + 1 de descanso', 'Modo coach con temporizador, voz y registro de cada serie', 'Cargas propuestas que tú ajustas: nada cambia sin tu aprobación', 'Funciona sin conexión y sin crear cuenta'].map((t) => (
+        {['4 días de fuerza (A, B, C, D) con énfasis en glúteos + 2 de cardio + 1 de descanso', 'Pensado para tus mancuernas de 10, 15 y 20 lb, peso corporal y botellas de agua', 'Registras peso real, repeticiones y repeticiones en reserva (RIR)', 'Modo coach con temporizador, indicaciones y comandos de voz', 'Nada cambia sin tu aprobación · funciona sin conexión y sin cuenta'].map((t) => (
           <li key={t} className="flex gap-3 rounded-2xl bg-surface p-3">
             <span className="text-sage" aria-hidden>●</span>
             {t}
@@ -27,7 +27,7 @@ export function Onboarding() {
         Tu perfil indica hígado graso. Esta app no es un servicio médico ni sustituye a tu profesional de la salud: consúltale antes de empezar si tienes cualquier condición clínica, lesión o medicación, y detente ante dolor, mareo, falta de aire o dolor en el pecho.
       </Notice>
       <Notice title="Sobre los objetivos">
-        Las cargas son referencias ajustables, no obligaciones. No es posible eliminar grasa de una zona concreta con ejercicios localizados. La referencia de cintura de 60 cm es solo estética y personal: no es una predicción ni una meta médica. No hay garantías de resultados.
+        La prioridad es ganar fuerza, desarrollar glúteos y definición muscular, no un número de báscula o de cintura. Las cargas semanales son propuestas condicionadas a tu técnica y esfuerzo, nunca obligaciones. No es posible eliminar grasa de una zona concreta con ejercicios localizados, y no hay garantías de resultados.
       </Notice>
       <label className="flex min-h-12 items-start gap-3 rounded-2xl bg-surface p-3">
         <input type="checkbox" className="mt-1 h-6 w-6 accent-[var(--sage)]" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
@@ -37,8 +37,8 @@ export function Onboarding() {
     <div key="2" className="flex flex-col gap-4">
       <h1 className="font-display text-3xl font-semibold">Dos cosas útiles</h1>
       <div className="rounded-2xl bg-surface p-4">
-        <p className="font-semibold">1. Revisa tus mancuernas</p>
-        <p className="text-muted">En Ajustes → Mis mancuernas indica qué pesos tienes. La app solo propondrá cargas que poseas.</p>
+        <p className="font-semibold">1. Tu equipamiento ya está cargado</p>
+        <p className="text-muted">Pares de mancuernas fijas de 10, 15 y 20 lb, más botellas de agua como alternativa ligera. Puedes editarlo en Ajustes → Mi equipamiento. La app nunca propone una mancuerna que no tengas.</p>
       </div>
       {isIOS() && !isStandalone() ? (
         <div className="rounded-2xl bg-surface p-4">

@@ -1,40 +1,58 @@
-import { findPlanExercise, PROGRAM_WEEKS } from '../data/plan';
+import { EXERCISES, PROGRAM_WEEKS, getExercise, type Mode } from '../data/plan';
 import { addDays } from './dates';
-import { cardioTargetForWeek, dateFor, isStrengthDay, programDayFor, weekDates } from './program';
+import { cardioTargetForWeek, dateFor, isRecoveryWeek, isStrengthDay, programDayFor, weekDates } from './program';
 import type { ExerciseSessionResult } from './progression';
-import type { CardioLog, LoadAdjustment, WorkoutSession } from './types';
+import { setOption, type CardioLog, type ExerciseLog, type WorkoutSession } from './types';
+import { compareOptions, totalLb, type LoadOption } from './weights';
+
+const byTime = (a: WorkoutSession, b: WorkoutSession) => (a.date + a.startedAt).localeCompare(b.date + b.startedAt);
+
+export function modeOf(e: Pick<ExerciseLog, 'exerciseId' | 'substitute'>): Mode {
+  return e.substitute?.mode ?? getExercise(e.exerciseId)?.mode ?? 'body';
+}
 
 /** Historial de un ejercicio (sin sustituciones), en orden cronológico. */
-export function exerciseHistory(sessions: WorkoutSession[], exerciseId: string): ExerciseSessionResult[] {
+export function exerciseHistory(sessions: WorkoutSession[], exerciseId: string, opts: { skipRecovery?: boolean } = {}): ExerciseSessionResult[] {
   return sessions
-    .filter((s) => s.status !== 'abandoned')
+    .filter((s) => s.status !== 'abandoned' && !(opts.skipRecovery && isRecoveryWeek(s.week)))
     .slice()
-    .sort((a, b) => (a.date + a.startedAt).localeCompare(b.date + b.startedAt))
+    .sort(byTime)
     .flatMap((s) =>
       s.exercises
         .filter((e) => e.exerciseId === exerciseId && !e.substitute && e.sets.length > 0)
         .map((e) => ({
           date: s.date,
-          loadLb: Math.max(...e.sets.map((x) => x.loadLb)),
-          sets: e.sets.map((x) => ({ reps: x.reps, loadLb: x.loadLb, difficulty: x.difficulty, pain: x.pain, techniqueOk: x.techniqueOk })),
+          plannedSets: e.plannedSets,
+          sets: e.sets.map((x) => ({
+            reps: x.reps,
+            option: setOption(x),
+            // Registros v1 sin RIR: se tratan como "no registrado".
+            rir: x.rir ?? null,
+            pain: x.pain,
+            techniqueOk: x.techniqueOk,
+          })),
         })),
     );
 }
 
-/** Delta aprobado vigente para un ejercicio (el más reciente). */
-export function currentDelta(adjustments: LoadAdjustment[], exerciseId: string): number | undefined {
-  const list = adjustments.filter((a) => a.exerciseId === exerciseId).sort((a, b) => a.createdAt.localeCompare(b.createdAt));
-  return list.length ? list[list.length - 1].deltaLb : undefined;
+export function topOption(r: ExerciseSessionResult): LoadOption | undefined {
+  return r.sets.map((s) => s.option).sort(compareOptions).pop();
 }
 
 export function sessionVolume(s: WorkoutSession): number {
   let v = 0;
   for (const e of s.exercises) {
-    const plan = findPlanExercise(e.exerciseId);
-    const factor = (e.substitute?.loadType ?? plan?.loadType) === 'each' ? 2 : 1;
-    for (const set of e.sets) if (!plan?.timed) v += set.reps * set.loadLb * factor;
+    const ex = getExercise(e.exerciseId);
+    if (ex?.timed && !e.substitute) continue;
+    const mode = modeOf(e);
+    for (const set of e.sets) v += set.reps * totalLb(setOption(set), set.mode ?? mode);
   }
   return Math.round(v);
+}
+
+/** Series de trabajo de glúteo (ejercicios marcados como glúteo, sin sustituciones). */
+export function gluteSets(s: WorkoutSession): number {
+  return s.exercises.filter((e) => !e.substitute && EXERCISES[e.exerciseId]?.glute).reduce((a, e) => a + e.sets.length, 0);
 }
 
 export interface WeekSummary {
@@ -44,6 +62,7 @@ export interface WeekSummary {
   cardioMinutes: number;
   cardioTarget: number;
   volumeLb: number;
+  gluteSets: number;
 }
 
 export function weekSummaries(sessions: WorkoutSession[], cardio: CardioLog[]): WeekSummary[] {
@@ -58,6 +77,7 @@ export function weekSummaries(sessions: WorkoutSession[], cardio: CardioLog[]): 
       cardioMinutes: cardio.filter((c) => dates.includes(c.date)).reduce((a, c) => a + c.minutes, 0),
       cardioTarget: cardioTargetForWeek(w),
       volumeLb: done.reduce((a, s) => a + sessionVolume(s), 0),
+      gluteSets: done.reduce((a, s) => a + gluteSets(s), 0),
     });
   }
   return out;
@@ -70,10 +90,6 @@ export interface Adherence {
   cardioPct: number | null;
 }
 
-/**
- * Adherencia hasta hoy: sesiones de fuerza completadas / programadas en días ya vividos
- * (incluido hoy solo si ya se completó). Cardio: minutos acumulados / meta prorrateada de semanas completas + semana actual.
- */
 export function adherence(sessions: WorkoutSession[], cardio: CardioLog[], todayIso: string): Adherence {
   const pd = programDayFor(todayIso);
   if (pd.status === 'before') return { strengthDone: 0, strengthDue: 0, pct: null, cardioPct: null };
@@ -88,15 +104,13 @@ export function adherence(sessions: WorkoutSession[], cardio: CardioLog[], today
       const date = dateFor(w, dow);
       const k = programDayFor(date).dayKey;
       if (!isStrengthDay(k)) continue;
-      const isPast = date < todayIso;
-      const isToday = date === todayIso;
-      if (isPast || (isToday && completed.has(k))) {
+      if (date < todayIso || (date === todayIso && completed.has(k))) {
         due++;
         if (completed.has(k)) doneCount++;
       }
     }
-    const dates = weekDates(w);
     if (w < lastWeek || pd.status === 'after') {
+      const dates = weekDates(w);
       cardioTarget += cardioTargetForWeek(w);
       cardioDone += cardio.filter((c) => dates.includes(c.date)).reduce((a, c) => a + c.minutes, 0);
     }
@@ -111,15 +125,22 @@ export function adherence(sessions: WorkoutSession[], cardio: CardioLog[], today
 
 export function cardioThisWeek(cardio: CardioLog[], todayIso: string): { minutes: number; target: number; week: number | null } {
   const pd = programDayFor(todayIso);
-  if (pd.week === null) {
-    const monday = addDays(todayIso, -pd.dow);
-    const dates = Array.from({ length: 7 }, (_, i) => addDays(monday, i));
-    return { minutes: cardio.filter((c) => dates.includes(c.date)).reduce((a, c) => a + c.minutes, 0), target: 150, week: null };
-  }
-  const dates = weekDates(pd.week);
+  const dates = pd.week === null ? Array.from({ length: 7 }, (_, i) => addDays(addDays(todayIso, -pd.dow), i)) : weekDates(pd.week);
   return {
     minutes: cardio.filter((c) => dates.includes(c.date)).reduce((a, c) => a + c.minutes, 0),
-    target: cardioTargetForWeek(pd.week),
+    target: pd.week === null ? 150 : cardioTargetForWeek(pd.week),
     week: pd.week,
   };
+}
+
+/** Evolución de fuerza en un ejercicio: primera y última sesión (carga y mejores reps). */
+export function strengthProgress(sessions: WorkoutSession[], exerciseId: string) {
+  const h = exerciseHistory(sessions, exerciseId);
+  if (!h.length) return null;
+  const summary = (r: ExerciseSessionResult) => {
+    const top = topOption(r)!;
+    const reps = Math.max(...r.sets.filter((s) => compareOptions(s.option, top) === 0).map((s) => s.reps));
+    return { date: r.date, option: top, reps };
+  };
+  return { first: summary(h[0]), last: summary(h[h.length - 1]), sessions: h.length };
 }

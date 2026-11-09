@@ -1,6 +1,8 @@
 /** Exportación/importación JSON (copia completa) y CSV (series, medidas, cardio). */
-import { findPlanExercise } from '../data/plan';
-import type { CardioLog, LoadAdjustment, Measurement, WorkoutSession } from './types';
+import { getExercise } from '../data/plan';
+import { modeOf } from './stats';
+import { setOption, type CardioLog, type LoadAdjustment, type Measurement, type WorkoutSession } from './types';
+import { totalLb } from './weights';
 
 export interface BackupData {
   kv: { key: string; value: unknown }[];
@@ -86,14 +88,17 @@ export function parseCSV(text: string): string[][] {
   return rows.filter((r) => r.some((f) => f.trim() !== ''));
 }
 
-const DIFF_ES = { easy: 'facil', ok: 'adecuada', hard: 'dificil' } as const;
+const KIND_ES = { body: 'peso_corporal', light: 'alternativa_ligera', db: 'mancuerna_fija' } as const;
+const MODE_ES = { held: 'una_mancuerna_ambas_manos', each: 'por_mano', one: 'una_mano', body: 'peso_corporal' } as const;
 
 export function setsToCSV(sessions: WorkoutSession[]): string {
   const rows: unknown[][] = [];
   for (const s of sessions) {
     for (const ex of s.exercises) {
-      const plan = findPlanExercise(ex.exerciseId);
+      const plan = getExercise(ex.exerciseId);
       for (const set of ex.sets) {
+        const opt = setOption(set);
+        const mode = set.mode ?? modeOf(ex);
         rows.push([
           s.date,
           s.week,
@@ -102,9 +107,13 @@ export function setsToCSV(sessions: WorkoutSession[]): string {
           ex.substitute?.name ?? plan?.nameEs ?? ex.exerciseId,
           set.setNumber,
           set.reps,
-          set.loadLb,
-          plan?.loadType ?? '',
-          set.difficulty ? DIFF_ES[set.difficulty] : '',
+          KIND_ES[opt.kind],
+          MODE_ES[mode],
+          opt.label ?? '',
+          Math.round(opt.lb * 10) / 10,
+          Math.round(totalLb(opt, mode) * 10) / 10,
+          set.rir === undefined || set.rir === null ? '' : set.rir >= 4 ? '4+' : set.rir,
+          set.tempo ?? '',
           set.pain ? 'si' : 'no',
           set.techniqueOk ? 'si' : 'no',
         ]);
@@ -112,7 +121,7 @@ export function setsToCSV(sessions: WorkoutSession[]): string {
     }
   }
   return toCSV(
-    ['fecha', 'semana', 'dia', 'ejercicio_id', 'ejercicio', 'serie', 'reps_o_segundos', 'carga_lb', 'tipo_carga', 'dificultad', 'dolor', 'tecnica_ok'],
+    ['fecha', 'semana', 'dia', 'ejercicio_id', 'ejercicio', 'serie', 'reps_o_segundos', 'tipo_carga', 'sujecion', 'objeto', 'carga_por_unidad_lb', 'carga_total_lb', 'rir', 'tempo', 'dolor', 'tecnica_ok'],
     rows,
   );
 }

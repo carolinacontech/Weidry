@@ -26,33 +26,39 @@ await page.getByRole('button', { name: 'Empezar entrenamiento' }).first().click(
 await page.getByText('Calentamiento').first().waitFor();
 await shot('02-warmup');
 await page.getByRole('button', { name: /Listo, empezar/ }).click();
-await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
-await page.getByRole('button', { name: 'Fácil' }).click();
+const rir2 = () => page.getByRole('button', { name: /^2 repeticiones en reserva/ }).click();
+await page.getByRole('heading', { name: 'Hip thrust / puente de glúteo con mancuerna' }).waitFor();
+await page.getByText('15 lb total · 1 mancuerna con ambas manos').first().waitFor();
+await rir2();
 await shot('03-coach');
 await page.getByRole('button', { name: /Completar serie/ }).click();
 await page.getByText('Descanso', { exact: true }).waitFor();
 await shot('04-rest');
 await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
+await rir2();
 await page.getByRole('button', { name: /Completar serie/ }).click();
 // Tras 2 series (semana 1) pasa al siguiente ejercicio
 await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
+await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
+await page.getByRole('button', { name: /Omitir/ }).click();
 await page.getByRole('heading', { name: 'Peso muerto rumano' }).waitFor();
+await page.getByText('10 lb por mano · 20 lb total').first().waitFor();
 // Sustituir
 await page.getByRole('button', { name: /Sustituir/ }).click();
 await page.getByRole('button', { name: /Bisagra de cadera/ }).click();
 await page.getByRole('heading', { name: /Bisagra de cadera/ }).waitFor();
 // Omitir
 await page.getByRole('button', { name: /Omitir/ }).click();
-await page.getByRole('heading', { name: 'Puente de glúteo con peso' }).waitFor();
+await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
 // Pausa y reanudar
-await page.getByRole('button', { name: /Pausar/ }).click();
+await page.getByRole('button', { name: /⏸ Pausa/ }).click();
 await page.getByRole('heading', { name: 'En pausa' }).waitFor();
 await page.getByRole('button', { name: /Reanudar/ }).click();
 await page.getByRole('heading', { name: 'En pausa' }).waitFor({ state: 'hidden' });
 await page.waitForTimeout(300); // deja terminar la escritura en IndexedDB
 // Recuperación de sesión interrumpida: recargar
 await page.reload();
-await page.getByRole('heading', { name: 'Puente de glúteo con peso' }).waitFor();
+await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
 // Terminar
 await page.getByRole('button', { name: 'Terminar sesión ahora' }).click();
 await page.getByRole('heading', { name: 'Resumen' }).waitFor();
@@ -63,13 +69,13 @@ await page.getByText('completado ✓').waitFor();
 // --- Segunda sesión: dos sesiones "fáciles" → sugerencia de subida que requiere aprobación
 await page.getByRole('button', { name: 'Repetir entrenamiento' }).click();
 await page.getByRole('button', { name: /Listo, empezar/ }).click();
-await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
+await page.getByRole('heading', { name: 'Hip thrust / puente de glúteo con mancuerna' }).waitFor();
 for (let i = 0; i < 2; i++) {
-  await page.getByRole('button', { name: 'Fácil' }).click();
+  await rir2();
   await page.getByRole('button', { name: /Completar serie/ }).click();
   await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
 }
-await page.getByRole('heading', { name: 'Peso muerto rumano' }).waitFor();
+await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
 // Dolor → indicación de parar
 await page.getByRole('switch', { name: 'Sentí dolor o molestia' }).click();
 await page.getByRole('button', { name: 'Registrar y parar' }).click();
@@ -77,12 +83,12 @@ await page.getByRole('heading', { name: 'Detén el ejercicio' }).waitFor();
 await shot('13-dolor');
 await page.getByRole('button', { name: 'Terminar la sesión' }).click();
 await page.getByRole('heading', { name: 'Resumen' }).waitFor();
-await page.getByRole('button', { name: /Aprobar 10 lb/ }).waitFor();
+await page.getByRole('button', { name: /Aprobar 20 lb total/ }).waitFor();
 await shot('14-sugerencia');
-await page.getByRole('button', { name: /Aprobar 10 lb/ }).click();
-await page.getByText('Propuesta actualizada a 10 lb').waitFor();
+await page.getByRole('button', { name: /Aprobar 20 lb total/ }).click();
+await page.getByText('Próxima propuesta: 20 lb total').waitFor();
 await page.getByRole('button', { name: 'Guardar y terminar' }).click();
-await page.getByText('10 lb total').first().waitFor(); // la propuesta aprobada se refleja en Inicio
+await page.getByText('20 lb total · 1 mancuerna con ambas manos').first().waitFor(); // la propuesta aprobada se refleja en Inicio
 
 // Cardio desde Inicio
 await page.getByRole('button', { name: '+ Añadir' }).click();
@@ -91,6 +97,7 @@ await page.getByText('30', { exact: true }).first().waitFor();
 
 // Medidas
 await page.goto(`${BASE}/#/progreso`);
+await page.getByRole('tab', { name: 'Medidas' }).click();
 await page.getByRole('button', { name: /Registrar medidas/ }).click();
 await page.getByLabel('Peso (lb)').fill('147');
 await page.getByLabel('Cintura (cm)').fill('82.5');
@@ -99,9 +106,10 @@ await page.getByText('Medidas guardadas').waitFor();
 
 // Inventario: añadir 2 lb
 await page.goto(`${BASE}/#/ajustes`);
-await page.getByLabel('Añadir peso').fill('2');
-await page.getByRole('button', { name: 'Añadir', exact: true }).click();
-await page.getByText('2 lb añadido').waitFor();
+await page.getByLabel('Nombre').fill('Botella 2 L');
+await page.getByLabel('Peso (lb)').fill('4.4');
+await page.getByRole('button', { name: 'Añadir alternativa ligera' }).click();
+await page.getByText('Botella 2 L añadida').waitFor();
 
 // Exportación JSON
 const [download] = await Promise.all([page.waitForEvent('download'), page.getByRole('button', { name: /Exportar copia completa/ }).click()]);
@@ -109,6 +117,11 @@ const backup = JSON.parse(await (await import('node:fs/promises')).readFile(awai
 if (backup.data.sessions.length !== 2 || backup.data.adjustments.length !== 1 || backup.data.cardio.length !== 1) {
   throw new Error('La copia exportada no tiene los datos esperados: ' + JSON.stringify(Object.fromEntries(Object.entries(backup.data).map(([k, v]) => [k, v.length]))));
 }
+
+await page.goto(`${BASE}/#/plan`);
+await page.getByRole('tab', { name: 'Tabla de cargas' }).click();
+await page.waitForTimeout(300);
+await shot('15-tabla');
 
 for (const [hash, name] of [['/plan', '06-plan'], ['/progreso', '07-progreso'], ['/guia', '08-guia'], ['/guia/romanian-deadlift', '09-guia-detalle'], ['/ajustes', '10-ajustes'], ['/historial', '11-historial']]) {
   await page.goto(`${BASE}/#${hash}`);

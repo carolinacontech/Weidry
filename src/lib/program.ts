@@ -7,7 +7,8 @@ import {
   SETS_PER_WEEK,
   WEEK_SCHEDULE,
   type DayKey,
-  type PlanExercise,
+  type PlanSlot,
+  type Rx,
 } from '../data/plan';
 import { addDays, diffDays } from './dates';
 
@@ -39,12 +40,16 @@ export function dateFor(week: number, dow: number, start = PROGRAM_START): strin
   return addDays(start, (week - 1) * 7 + dow);
 }
 
+export function clampWeek(week: number): number {
+  return Math.min(PROGRAM_WEEKS, Math.max(1, Math.round(week)));
+}
+
 export function setsForWeek(week: number): number {
   return SETS_PER_WEEK[clampWeek(week) - 1];
 }
 
-export function setsFor(ex: PlanExercise, week: number): number {
-  return ex.fixedSets ?? setsForWeek(week);
+export function setsFor(slot: Pick<PlanSlot, 'fixedSets'>, week: number): number {
+  return slot.fixedSets ?? setsForWeek(week);
 }
 
 export function isRecoveryWeek(week: number): boolean {
@@ -55,14 +60,9 @@ export function cardioTargetForWeek(week: number): number {
   return CARDIO_MINUTES_PER_WEEK[clampWeek(week) - 1];
 }
 
-/** Carga propuesta del plan (lb) para un ejercicio y semana. 0 = peso corporal. */
-export function plannedLoadLb(ex: PlanExercise, week: number): number {
-  if (ex.loadType === 'body' || ex.loads.length === 0) return 0;
-  return ex.loads[clampWeek(week) - 1];
-}
-
-export function clampWeek(week: number): number {
-  return Math.min(PROGRAM_WEEKS, Math.max(1, Math.round(week)));
+/** Prescripción del plan para una semana. */
+export function plannedRx(slot: PlanSlot, week: number): Rx {
+  return slot.rx[clampWeek(week) - 1];
 }
 
 export function isStrengthDay(k: DayKey): k is 'A' | 'B' | 'C' | 'D' {
@@ -73,7 +73,6 @@ export function planDay(k: 'A' | 'B' | 'C' | 'D') {
   return PLAN_DAYS[k];
 }
 
-/** Todas las fechas del programa con su tipo de día. */
 export function programCalendar(start = PROGRAM_START): ProgramDay[] {
   const days: ProgramDay[] = [];
   for (let i = 0; i < PROGRAM_WEEKS * 7; i++) days.push(programDayFor(addDays(start, i), start));

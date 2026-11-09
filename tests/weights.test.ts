@@ -1,60 +1,71 @@
 import { describe, expect, it } from 'vitest';
-import { availableLoadsLb, formatLoad, isBigJump, nextDown, nextUp, snapToInventory, type InventoryItem } from '../src/lib/weights';
+import { EXERCISES } from '../src/data/plan';
+import { DEFAULT_INVENTORY, formatOption, isBigJump, ladderFor, normalizeInventory, resolveRx, stepDown, stepUp, totalLb, type InventoryItem } from '../src/lib/weights';
 
-const inv: InventoryItem[] = [
-  { id: 'a', value: 3, unit: 'lb', count: 2 },
-  { id: 'b', value: 5, unit: 'lb', count: 2 },
-  { id: 'c', value: 8, unit: 'lb', count: 1 },
-  { id: 'd', value: 5, unit: 'kg', count: 2 },
-];
+const db = (lb: number) => ({ kind: 'db' as const, lb });
 
-describe('inventario y cargas', () => {
-  it('para "por mano" exige un par salvo ejercicios unilaterales', () => {
-    expect(availableLoadsLb(inv, 'each').map(Math.round)).toEqual([3, 5, 11]);
-    expect(availableLoadsLb(inv, 'each', true).map(Math.round)).toEqual([3, 5, 8, 11]);
-    expect(availableLoadsLb(inv, 'single').map(Math.round)).toEqual([3, 5, 8, 11]);
-    expect(availableLoadsLb(inv, 'body')).toEqual([]);
+describe('equipamiento real', () => {
+  it('inventario por defecto: pares de 10, 15 y 20 lb + botellas', () => {
+    const fixed = DEFAULT_INVENTORY.filter((i) => i.kind === 'fixed');
+    expect(fixed.map((i) => [i.value, i.count])).toEqual([[10, 2], [15, 2], [20, 2]]);
+    expect(DEFAULT_INVENTORY.some((i) => i.kind === 'light')).toBe(true);
   });
 
-  it('nunca propone una carga mayor que la del plan si tiene una menor', () => {
-    const avail = availableLoadsLb(inv, 'each');
-    const r = snapToInventory(8, avail);
-    expect(r.loadLb).toBe(5);
+  it('la escalera solo contiene opciones existentes', () => {
+    const l = ladderFor(EXERCISES['romanian-deadlift'], DEFAULT_INVENTORY);
+    expect(l).toEqual([db(10), db(15), db(20)]);
+    const lat = ladderFor(EXERCISES['lateral-raise'], DEFAULT_INVENTORY);
+    expect(lat.map((o) => o.kind)).toEqual(['light', 'light', 'light', 'db', 'db', 'db']);
+    const lunge = ladderFor(EXERCISES['reverse-lunge'], DEFAULT_INVENTORY);
+    expect(lunge[0]).toEqual({ kind: 'body', lb: 0 });
+  });
+
+  it('por mano exige un par; con una sola unidad no se ofrece', () => {
+    const inv: InventoryItem[] = [
+      { id: 'a', kind: 'fixed', value: 10, unit: 'lb', count: 2 },
+      { id: 'b', kind: 'fixed', value: 15, unit: 'lb', count: 1 },
+    ];
+    expect(ladderFor(EXERCISES['romanian-deadlift'], inv)).toEqual([db(10)]);
+    expect(ladderFor(EXERCISES['goblet-squat'], inv).filter((o) => o.kind === 'db')).toEqual([db(10), db(15)]);
+  });
+
+  it('nunca resuelve a una mancuerna inexistente', () => {
+    const l = ladderFor(EXERCISES['romanian-deadlift'], DEFAULT_INVENTORY);
+    expect(resolveRx({ kind: 'db', lb: 12 }, l)).toMatchObject({ option: db(10), exact: false });
+    expect(resolveRx({ kind: 'db', lb: 25 }, l).option).toEqual(db(20));
+    expect(resolveRx({ kind: 'db', lb: 15 }, l)).toMatchObject({ option: db(15), exact: true });
+  });
+
+  it('alternativa ligera: usa la botella más pesada; sin botellas cae a peso corporal o avisa', () => {
+    const lat = ladderFor(EXERCISES['lateral-raise'], DEFAULT_INVENTORY);
+    expect(resolveRx({ kind: 'light' }, lat).option).toMatchObject({ kind: 'light', lb: 3.3 });
+    const onlyDb = DEFAULT_INVENTORY.filter((i) => i.kind === 'fixed');
+    const r = resolveRx({ kind: 'light' }, ladderFor(EXERCISES['lateral-raise'], onlyDb));
     expect(r.exact).toBe(false);
-    expect(r.note).toMatch(/repeticiones/);
+    expect(r.note).toMatch(/botellas/);
   });
 
-  it('coincidencia exacta', () => {
-    expect(snapToInventory(5, [3, 5, 8])).toEqual({ loadLb: 5, exact: true });
+  it('pasos arriba/abajo y saltos grandes', () => {
+    const l = ladderFor(EXERCISES['romanian-deadlift'], DEFAULT_INVENTORY);
+    expect(stepUp(l, db(10))).toEqual(db(15));
+    expect(stepUp(l, db(20))).toBeUndefined();
+    expect(stepDown(l, db(10))).toBeUndefined();
+    expect(isBigJump(db(10), db(15))).toBe(true);
+    expect(isBigJump({ kind: 'light', lb: 3.3 }, db(10))).toBe(true);
+    expect(isBigJump({ kind: 'light', lb: 2.2 }, { kind: 'light', lb: 3.3 })).toBe(false);
   });
 
-  it('si solo hay pesos mayores, usa el más ligero y lo advierte', () => {
-    const r = snapToInventory(2, [3, 5]);
-    expect(r.loadLb).toBe(3);
-    expect(r.note).toBeDefined();
+  it('distingue peso por mano y total', () => {
+    expect(formatOption(db(10), 'each', 'lb')).toBe('10 lb por mano · 20 lb total');
+    expect(formatOption(db(15), 'held', 'lb')).toBe('15 lb total · 1 mancuerna con ambas manos');
+    expect(formatOption(db(10), 'one', 'lb')).toBe('10 lb en una mano (1 mancuerna)');
+    expect(formatOption({ kind: 'body', lb: 0 }, 'each', 'lb')).toBe('Peso corporal');
+    expect(formatOption({ kind: 'light', lb: 2.2, label: 'Botella 1 L' }, 'each', 'lb')).toMatch(/Botella 1 L .*en cada mano/);
+    expect(totalLb(db(10), 'each')).toBe(20);
+    expect(totalLb(db(15), 'held')).toBe(15);
   });
 
-  it('peso corporal', () => {
-    expect(snapToInventory(0, [3])).toEqual({ loadLb: 0, exact: true });
-  });
-
-  it('siguiente peso arriba/abajo', () => {
-    expect(nextUp(5, [3, 5, 8])).toBe(8);
-    expect(nextUp(8, [3, 5, 8])).toBeUndefined();
-    expect(nextDown(5, [3, 5, 8])).toBe(3);
-    expect(nextDown(3, [3, 5, 8])).toBeUndefined();
-  });
-
-  it('detecta saltos grandes', () => {
-    expect(isBigJump(8, 10)).toBe(false);
-    expect(isBigJump(12, 25)).toBe(true);
-    expect(isBigJump(3, 5)).toBe(false);
-  });
-
-  it('formatea por mano, total y kg', () => {
-    expect(formatLoad(8, 'each', 'lb')).toBe('8 lb por mano');
-    expect(formatLoad(10, 'single', 'lb')).toBe('10 lb total (una mancuerna)');
-    expect(formatLoad(0, 'each', 'lb')).toBe('Peso corporal');
-    expect(formatLoad(11.0231, 'each', 'kg')).toBe('5 kg por mano');
+  it('normaliza inventarios de la versión anterior', () => {
+    expect(normalizeInventory([{ id: 'x', value: 5, unit: 'lb', count: 2 }])[0].kind).toBe('fixed');
   });
 });

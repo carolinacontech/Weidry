@@ -1,30 +1,31 @@
 import { useState } from 'react';
-import { allPlanExercises, findPlanExercise } from '../data/plan';
+import { RIR_TARGET, getExercise, planExercises } from '../data/plan';
 import { useCardio, useMeasurements, useProfile, useSessions, useSettings } from '../hooks/useData';
 import { db } from '../lib/db';
 import { formatShort, today } from '../lib/dates';
 import { programDayFor } from '../lib/program';
-import { exerciseHistory, weekSummaries } from '../lib/stats';
+import { rirLabel } from '../lib/progression';
+import { exerciseHistory, topOption, weekSummaries } from '../lib/stats';
 import type { Measurement } from '../lib/types';
-import { displayValue } from '../lib/weights';
+import { displayValue, formatOptionShort } from '../lib/weights';
 import { CardioLogger } from './CardioLogger';
 import { BarChart, LineChart } from './Charts';
 import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, inputClass, useToast } from './ui';
 
-type Tab = 'medidas' | 'cargas' | 'volumen' | 'cardio';
+type Tab = 'fuerza' | 'gluteo' | 'cardio' | 'medidas';
 
 export function ProgressView() {
-  const [tab, setTab] = useState<Tab>('medidas');
+  const [tab, setTab] = useState<Tab>('fuerza');
   return (
     <div>
-      <PageHeader title="Progreso" subtitle="Tendencias semanales, no juicios diarios" action={<a href="#/historial" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Historial →</a>} />
+      <PageHeader title="Progreso" subtitle="Fuerza, glúteos y constancia primero" action={<a href="#/historial" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Historial →</a>} />
       <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Secciones de progreso">
         {(
           [
-            ['medidas', 'Medidas'],
-            ['cargas', 'Cargas'],
-            ['volumen', 'Volumen'],
+            ['fuerza', 'Fuerza'],
+            ['gluteo', 'Glúteo y volumen'],
             ['cardio', 'Cardio'],
+            ['medidas', 'Medidas'],
           ] as const
         ).map(([k, l]) => (
           <button
@@ -41,8 +42,8 @@ export function ProgressView() {
       </div>
       <div role="tabpanel">
         {tab === 'medidas' ? <Measurements /> : null}
-        {tab === 'cargas' ? <Loads /> : null}
-        {tab === 'volumen' ? <Volume /> : null}
+        {tab === 'fuerza' ? <Loads /> : null}
+        {tab === 'gluteo' ? <Volume /> : null}
         {tab === 'cardio' ? <Cardio /> : null}
       </div>
     </div>
@@ -61,11 +62,11 @@ function Measurements() {
   return (
     <div className="flex flex-col gap-4">
       <Button size="lg" onClick={() => setOpen(true)}>+ Registrar medidas de esta semana</Button>
-      <Notice>Mide una vez por semana, el mismo día, en ayunas y con la misma cinta. Ningún ejercicio reduce grasa de una zona concreta; los cambios de cintura dependen de muchos factores.</Notice>
+      <Notice>Las medidas son opcionales y secundarias: la prioridad es la fuerza y el desarrollo de glúteos. Si mides, hazlo una vez por semana, el mismo día y con la misma cinta. Ningún ejercicio reduce grasa de una zona concreta; los cambios de cintura dependen de muchos factores.</Notice>
 
       <Card>
         <h2 className="mb-2 font-semibold">Peso (lb)</h2>
-        <LineChart title="Peso corporal" unit="lb" points={withStart(profile.weightLb, pts('weightLb'))} refs={[{ value: profile.goalWeightLb, label: `Objetivo ${profile.goalWeightLb}` }]} empty={`Punto de partida: ${profile.weightLb} lb. Registra tu primera medida.`} />
+        <LineChart title="Peso corporal" unit="lb" points={withStart(profile.weightLb, pts('weightLb'))} refs={profile.showWeightGoal ? [{ value: profile.goalWeightLb, label: `Objetivo ${profile.goalWeightLb}` }] : []} empty={`Punto de partida: ${profile.weightLb} lb. Registra tu primera medida.`} />
       </Card>
       <Card>
         <h2 className="mb-2 font-semibold">Cintura (cm)</h2>
@@ -180,32 +181,51 @@ function MeasurementForm({ onSaved }: { onSaved: () => void }) {
 function Loads() {
   const sessions = useSessions();
   const settings = useSettings();
-  const weighted = allPlanExercises().filter((e) => e.loadType !== 'body');
-  const [exId, setExId] = useState(weighted[0].id);
+  const all = planExercises();
+  const [exId, setExId] = useState(all[0].id);
   if (!sessions || !settings) return <Loading />;
-  const ex = findPlanExercise(exId)!;
+  const ex = getExercise(exId)!;
   const hist = exerciseHistory(sessions, exId);
+  const modeText = ex.mode === 'each' ? 'por mano' : ex.mode === 'one' ? 'en una mano' : ex.mode === 'held' ? 'total' : '';
   return (
     <div className="flex flex-col gap-4">
+      <Notice>La fuerza se nota en más repeticiones, mejor técnica o más carga con {RIR_TARGET.min}–{RIR_TARGET.max} repeticiones en reserva. Todo cuenta como progreso.</Notice>
       <Field label="Ejercicio">
         {(id) => (
           <select id={id} className={inputClass} value={exId} onChange={(e) => setExId(e.target.value)}>
-            {weighted.map((e) => (
+            {all.map((e) => (
               <option key={e.id} value={e.id}>{e.nameEs}</option>
             ))}
           </select>
         )}
       </Field>
+      {ex.mode !== 'body' ? (
+        <Card>
+          <h2 className="mb-2 font-semibold">Carga más alta por sesión ({settings.unit} {modeText})</h2>
+          <LineChart
+            title={`Carga en ${ex.nameEs}`}
+            unit={settings.unit}
+            points={hist.map((h) => ({ label: formatShort(h.date), value: displayValue(topOption(h)?.lb ?? 0, settings.unit) }))}
+            empty="Aún no hay sesiones registradas de este ejercicio."
+          />
+        </Card>
+      ) : null}
       <Card>
-        <h2 className="mb-2 font-semibold">
-          Carga máxima por sesión ({settings.unit}{ex.loadType === 'each' ? ', por mano' : ', total'})
-        </h2>
-        <LineChart title={`Carga en ${ex.nameEs}`} unit={settings.unit} points={hist.map((h) => ({ label: formatShort(h.date), value: displayValue(h.loadLb, settings.unit) }))} empty="Aún no hay sesiones registradas de este ejercicio." />
+        <h2 className="mb-2 font-semibold">{ex.timed ? 'Segundos totales' : 'Repeticiones totales'} por sesión</h2>
+        <LineChart title={`${ex.timed ? 'Segundos' : 'Repeticiones'} en ${ex.nameEs}`} unit={ex.timed ? 's' : 'reps'} points={hist.map((h) => ({ label: formatShort(h.date), value: h.sets.reduce((a, s) => a + s.reps, 0) }))} empty="Aún no hay sesiones registradas de este ejercicio." />
       </Card>
-      <Card>
-        <h2 className="mb-2 font-semibold">Repeticiones totales por sesión</h2>
-        <LineChart title={`Repeticiones en ${ex.nameEs}`} unit="reps" points={hist.map((h) => ({ label: formatShort(h.date), value: h.sets.reduce((a, s) => a + s.reps, 0) }))} />
-      </Card>
+      {hist.length ? (
+        <Card>
+          <h2 className="mb-2 font-semibold">Últimas sesiones</h2>
+          <ul className="divide-y divide-line text-sm">
+            {[...hist].reverse().slice(0, 6).map((h, i) => (
+              <li key={h.date + i} className="tabular py-2">
+                <strong>{formatShort(h.date)}</strong> · {h.sets.map((st) => `${formatOptionShort(st.option, ex.mode, settings.unit)} × ${st.reps}${st.rir !== null ? ` (RIR ${rirLabel(st.rir)})` : ''}`).join(' · ')}
+              </li>
+            ))}
+          </ul>
+        </Card>
+      ) : null}
     </div>
   );
 }
@@ -219,6 +239,11 @@ function Volume() {
   const current = programDayFor(today()).week;
   return (
     <div className="flex flex-col gap-4">
+      <Card>
+        <h2 className="mb-1 font-semibold">Series de glúteo por semana</h2>
+        <p className="mb-2 text-xs text-muted">Hip thrust, sentadillas, pesos muertos, zancadas, búlgaras, puentes y abducciones.</p>
+        <BarChart title="Series de glúteo" unit="series" points={weeks.map((w) => ({ label: `S${w.week}`, value: w.gluteSets }))} highlightIndex={current ? current - 1 : undefined} />
+      </Card>
       <Card>
         <h2 className="mb-1 font-semibold">Volumen semanal estimado ({settings.unit})</h2>
         <p className="mb-2 text-xs text-muted">Repeticiones × carga (× 2 cuando es por mano). Útil para ver la tendencia; no tiene que subir cada semana, y baja en semanas de recuperación.</p>

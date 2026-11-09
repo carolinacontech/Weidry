@@ -1,15 +1,25 @@
-import type { LoadType } from '../data/plan';
+import type { Mode } from '../data/plan';
 import type { Difficulty } from './progression';
 import type { TimerState } from './timer';
-import type { Unit } from './weights';
+import type { LoadOption, Unit } from './weights';
+
+export type Tempo = 'normal' | 'lento';
 
 export interface SetLog {
   setNumber: number;
   /** Repeticiones (o segundos si el ejercicio es por tiempo). */
   reps: number;
-  /** Carga realmente usada en lb (0 = peso corporal). */
+  /** Carga realmente usada (tipo + peso de una unidad). Ausente en registros de la versión 1. */
+  option?: LoadOption;
+  /** Peso de una mancuerna/objeto en lb (0 = peso corporal). Se mantiene por compatibilidad y CSV. */
   loadLb: number;
-  difficulty: Difficulty | null;
+  /** Repeticiones en reserva (4 = 4 o más). null = no registrado. */
+  rir?: number | null;
+  tempo?: Tempo;
+  /** Cómo se sujetó la carga en esta serie si difiere del ejercicio. */
+  mode?: Mode;
+  /** Solo registros de la versión 1. */
+  difficulty?: Difficulty | null;
   pain: boolean;
   techniqueOk: boolean;
   completedAt: string;
@@ -17,11 +27,14 @@ export interface SetLog {
 
 export interface ExerciseLog {
   exerciseId: string;
-  /** Si se sustituyó: id y nombre de la alternativa. */
-  substitute?: { id: string; name: string; loadType: LoadType };
+  /** Si se sustituyó: id, nombre y cómo se sujeta la carga de la alternativa. */
+  substitute?: { id: string; name: string; mode: Mode };
   status: 'pending' | 'done' | 'skipped';
   plannedSets: number;
-  plannedLoadLb: number;
+  /** Carga propuesta al crear la sesión. */
+  plannedOption?: LoadOption;
+  /** Versión 1: carga propuesta en lb. */
+  plannedLoadLb?: number;
   sets: SetLog[];
 }
 
@@ -64,15 +77,12 @@ export interface CardioLog {
   notes?: string;
 }
 
-/** Ajuste de carga aprobado por la persona. */
+/** Cambio de carga aprobado explícitamente por la persona. */
 export interface LoadAdjustment {
   id?: number;
   exerciseId: string;
   createdAt: string;
-  /** Diferencia (lb) respecto a la carga del plan que se aplicará desde ahora. */
-  deltaLb: number;
-  /** Carga aprobada (lb) en el momento de la aprobación, para referencia. */
-  approvedLb: number;
+  option: LoadOption;
   reason: string;
 }
 
@@ -84,9 +94,12 @@ export interface Settings {
   restSec: 0 | 45 | 60 | 90 | 120;
   sound: boolean;
   voice: boolean;
+  /** Comandos de voz manos libres ("listo", "pausa", "siguiente"…). */
+  voiceCommands: boolean;
   vibration: boolean;
   wakeLock: boolean;
-  askDifficulty: boolean;
+  /** Pedir repeticiones en reserva en cada serie. */
+  askRir: boolean;
   reminderEnabled: boolean;
   reminderTime: string; // HH:MM
   notificationsEnabled: boolean;
@@ -102,11 +115,22 @@ export const DEFAULT_SETTINGS: Settings = {
   restSec: 0,
   sound: true,
   voice: true,
+  voiceCommands: false,
   vibration: true,
   wakeLock: true,
-  askDifficulty: true,
+  askRir: true,
   reminderEnabled: true,
   reminderTime: '18:00',
   notificationsEnabled: false,
   videoLinks: {},
 };
+
+/** Carga de una serie, compatible con registros antiguos. */
+export function setOption(s: Pick<SetLog, 'option' | 'loadLb'>): LoadOption {
+  return s.option ?? (s.loadLb > 0 ? { kind: 'db', lb: s.loadLb } : { kind: 'body', lb: 0 });
+}
+
+/** Carga propuesta de un ejercicio de la sesión, compatible con registros antiguos. */
+export function plannedOptionOf(e: Pick<ExerciseLog, 'plannedOption' | 'plannedLoadLb'>): LoadOption {
+  return e.plannedOption ?? ((e.plannedLoadLb ?? 0) > 0 ? { kind: 'db', lb: e.plannedLoadLb! } : { kind: 'body', lb: 0 });
+}
