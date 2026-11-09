@@ -48,7 +48,7 @@ export function VideoSlot({ exerciseId }: { exerciseId: string }) {
         isDirectVideo(url) ? (
           <video src={url} controls playsInline preload="metadata" className="w-full rounded-2xl bg-black" aria-label="Tu video de demostración" />
         ) : (
-          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-line bg-surface px-4 font-semibold text-sage-strong">
+          <a href={url} target="_blank" rel="noopener noreferrer" className="inline-flex min-h-12 items-center justify-center rounded-2xl border border-line bg-surface px-4 font-semibold text-primary-600">
             Abrir mi video de referencia ↗
           </a>
         )
@@ -101,7 +101,7 @@ export function GuideContent({ exerciseId, compact }: { exerciseId: string; comp
         <h3 className="mb-1 font-semibold">Claves</h3>
         <div className="flex flex-wrap gap-2">
           {g.cues.map((c) => (
-            <span key={c} className="rounded-full bg-sage-soft px-3 py-1 text-sm">{c}</span>
+            <span key={c} className="rounded-full bg-primary-soft px-3 py-1 text-sm">{c}</span>
           ))}
         </div>
       </div>
@@ -134,7 +134,7 @@ export function GuideView({ exerciseId }: { exerciseId?: string }) {
     const ex = findPlanExercise(exerciseId);
     return (
       <div>
-        <button type="button" onClick={() => navigate('/guia')} className="mb-2 min-h-11 font-semibold text-sage-strong">← Guía</button>
+        <button type="button" onClick={() => navigate('/guia')} className="mb-2 min-h-11 font-semibold text-primary-600">← Guía</button>
         <PageHeader title={ex?.nameEs ?? 'Ejercicio'} subtitle={ex ? `${ex.name} · ${ex.reps}` : undefined} />
         <GuideContent exerciseId={exerciseId} />
       </div>

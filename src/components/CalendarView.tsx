@@ -4,10 +4,10 @@ import { useAdjustments, useCardio, useInventory, useSessions, useSettings } fro
 import { formatLong, formatShort, today } from '../lib/dates';
 import { cardioTargetForWeek, isRecoveryWeek, isStrengthDay, programDayFor, setsForWeek, weekDates, type ProgramDay } from '../lib/program';
 import { DayPlanList } from './DayPlanList';
-import { LoadTable } from './LoadTable';
 import { CardioLogger } from './CardioLogger';
 import { StartWorkoutButton } from './StartWorkout';
-import { Loading, Modal, Notice, PageHeader } from './ui';
+import { ProgramOverview, ExerciseList, ProgressionRules } from './ProgramSections';
+import { Loading, Modal, Notice, PageHeader, Tabs } from './ui';
 
 const SHORT = ['L', 'M', 'X', 'J', 'V', 'S', 'D'];
 
@@ -18,7 +18,7 @@ export function CalendarView() {
   const inventory = useInventory();
   const adjustments = useAdjustments();
   const [selected, setSelected] = useState<ProgramDay | null>(null);
-  const [view, setView] = useState<'cal' | 'table'>('cal');
+  const [view, setView] = useState<'overview' | 'cal' | 'exercises' | 'progress'>('overview');
 
   if (!sessions || !cardio || !settings || !inventory || !adjustments) return <Loading />;
   const t = today();
@@ -26,16 +26,27 @@ export function CalendarView() {
 
   return (
     <div>
-      <PageHeader title="Plan de 13 semanas" subtitle="Toca un día para ver el detalle o entrenar" />
-      <div className="mb-4 flex gap-2" role="tablist" aria-label="Vista del plan">
-        <button type="button" role="tab" aria-selected={view === 'cal'} onClick={() => setView('cal')} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${view === 'cal' ? 'bg-ink text-bg' : 'bg-surface-2'}`}>Calendario</button>
-        <button type="button" role="tab" aria-selected={view === 'table'} onClick={() => setView('table')} className={`min-h-11 rounded-full px-4 text-sm font-semibold ${view === 'table' ? 'bg-ink text-bg' : 'bg-surface-2'}`}>Tabla de cargas</button>
+      <PageHeader title="Programa de 13 semanas" subtitle="Fuerza · Definición · Progresión de cargas" />
+      <div className="mb-5">
+        <Tabs
+          label="Vista del programa"
+          value={view}
+          onChange={setView}
+          tabs={[
+            ['overview', 'Vista general'],
+            ['cal', 'Por semanas'],
+            ['exercises', 'Ejercicios'],
+            ['progress', 'Progresión'],
+          ]}
+        />
       </div>
-      {view === 'table' ? <LoadTable /> : null}
+      {view === 'overview' ? <ProgramOverview currentWeek={currentWeek} /> : null}
+      {view === 'exercises' ? <ExerciseList /> : null}
+      {view === 'progress' ? <ProgressionRules /> : null}
       <div hidden={view !== 'cal'}>
       <div className="mb-4 flex flex-wrap gap-3 text-xs text-muted" aria-label="Leyenda">
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full bg-sage" /> Hecho</span>
-        <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full border-2 border-dashed border-clay" /> Pendiente pasado</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full bg-success" /> Hecho</span>
+        <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full border-2 border-dashed border-accent" /> Pendiente pasado</span>
         <span className="inline-flex items-center gap-1"><span className="inline-block h-4 w-4 rounded-full border border-line bg-surface" /> Próximo</span>
         <span className="inline-flex items-center gap-1">♥ Cardio · – Descanso</span>
       </div>
@@ -47,12 +58,12 @@ export function CalendarView() {
           const cardioMin = cardio.filter((c) => dates.includes(c.date)).reduce((a, c) => a + c.minutes, 0);
           const isCurrent = currentWeek === week;
           return (
-            <li key={week} className={`rounded-3xl border bg-surface p-3 ${isCurrent ? 'border-sage shadow-sm' : 'border-line'}`} aria-current={isCurrent ? 'true' : undefined}>
+            <li key={week} className={`rounded-2xl border bg-surface p-3 shadow-card ${isCurrent ? 'border-primary' : 'border-line/70'}`} aria-current={isCurrent ? 'true' : undefined}>
               <div className="mb-2 flex items-baseline justify-between gap-2 px-1">
                 <h2 className="font-semibold">
                   Semana {week}
-                  {isRecoveryWeek(week) ? <span className="ml-2 rounded-full bg-clay-soft px-2 py-0.5 text-xs font-semibold text-clay">Recuperación</span> : null}
-                  {isCurrent ? <span className="ml-2 rounded-full bg-sage-soft px-2 py-0.5 text-xs font-semibold text-sage-strong">Actual</span> : null}
+                  {isRecoveryWeek(week) ? <span className="ml-2 rounded-full bg-accent-soft px-2 py-0.5 text-xs font-semibold text-accent">Recuperación</span> : null}
+                  {isCurrent ? <span className="ml-2 rounded-full bg-primary-soft px-2 py-0.5 text-xs font-semibold text-primary-600">Actual</span> : null}
                 </h2>
                 <p className="tabular text-xs text-muted">
                   {setsForWeek(week)} series · {done.size}/4 · ♥ {cardioMin}/{cardioTargetForWeek(week)} min
@@ -71,8 +82,8 @@ export function CalendarView() {
                       type="button"
                       onClick={() => setSelected(pd)}
                       className={`flex min-h-14 flex-col items-center justify-center rounded-2xl text-xs transition ${
-                        isDone ? 'bg-sage text-on-sage' : missed ? 'border-2 border-dashed border-clay text-ink' : k === 'rest' ? 'bg-surface-2 text-muted' : 'border border-line bg-surface'
-                      } ${isToday ? 'ring-2 ring-sage-strong ring-offset-2 ring-offset-surface' : ''}`}
+                        isDone ? 'bg-success text-white' : missed ? 'border-2 border-dashed border-accent text-ink' : k === 'rest' ? 'bg-surface-2 text-muted' : 'border border-line bg-surface'
+                      } ${isToday ? 'ring-2 ring-primary-600 ring-offset-2 ring-offset-surface' : ''}`}
                       aria-label={`${formatLong(date)}: ${DAY_LABELS[k]}${isDone ? ', hecho' : missed ? ', pendiente' : ''}${isToday ? ', hoy' : ''}`}
                     >
                       <span className="opacity-80">{SHORT[i]} {formatShort(date).split(' ')[0]}</span>

@@ -182,18 +182,18 @@ function Figure({ a, b, animate, db, ghost }: { a: Pose; b: Pose; animate: boole
   const op = ghost ? 0.28 : 1;
   return (
     <g opacity={op}>
-      {line('armB', 'var(--sand)', 7)}
-      {line('legB', 'var(--sand)', 8)}
-      {db === 'both' ? dumbbell(a.wB, b.wB, 'var(--clay)') : null}
-      {line('torso', 'var(--sage)', 10)}
-      {line('neck', 'var(--sage)', 6)}
-      {line('legF', 'var(--sage)', 8)}
-      {line('armF', 'var(--sage)', 7)}
-      <circle cx={a.head[0]} cy={a.head[1]} r={10} fill="var(--surface)" stroke="var(--sage)" strokeWidth={5}>
+      {line('armB', 'var(--secondary)', 7)}
+      {line('legB', 'var(--secondary)', 8)}
+      {db === 'both' ? dumbbell(a.wB, b.wB, 'var(--accent)') : null}
+      {line('torso', 'var(--primary)', 10)}
+      {line('neck', 'var(--primary)', 6)}
+      {line('legF', 'var(--primary)', 8)}
+      {line('armF', 'var(--primary)', 7)}
+      <circle cx={a.head[0]} cy={a.head[1]} r={10} fill="var(--surface)" stroke="var(--primary)" strokeWidth={5}>
         {anim('cx', a.head[0], b.head[0])}
         {anim('cy', a.head[1], b.head[1])}
       </circle>
-      {db === 'front' || db === 'both' ? dumbbell(a.wF, b.wF, 'var(--clay)') : null}
+      {db === 'front' || db === 'both' ? dumbbell(a.wF, b.wF, 'var(--accent)') : null}
     </g>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { DAY_LABELS } from '../data/plan';
 import { useLiveQuery } from 'dexie-react-hooks';
 import { navigate } from '../hooks/useRoute';
@@ -25,12 +25,14 @@ export function StartWorkoutButton({
   dayKey,
   label = 'Empezar entrenamiento',
   size = 'xl',
+  icon,
 }: {
   date: string;
   week: number;
   dayKey: 'A' | 'B' | 'C' | 'D';
   label?: string;
   size?: 'md' | 'lg' | 'xl';
+  icon?: ReactNode;
 }) {
   const toast = useToast();
   const active = useActiveSession();
@@ -61,6 +63,7 @@ export function StartWorkoutButton({
   return (
     <>
       <Button size={size} className="w-full" onClick={onClick} loading={loading}>
+        {icon}
         {label}
       </Button>
       <Modal

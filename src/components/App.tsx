@@ -14,15 +14,96 @@ import { HistoryView } from './HistoryView';
 import { Onboarding } from './Onboarding';
 import { ProgressView } from './ProgressView';
 import { SettingsView, applyTheme } from './SettingsView';
+import { IconBook, IconCalendar, IconChart, IconDumbbell, IconHistory, IconHome, IconSettings, IconTape, Logo } from './icons';
+import { TrainingView } from './TrainingView';
 import { Loading, ToastProvider } from './ui';
 
-const TABS: { path: string; label: string; icon: ReactNode }[] = [
-  { path: '/', label: 'Hoy', icon: <path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6H9v6H4a1 1 0 0 1-1-1z" /> },
-  { path: '/plan', label: 'Plan', icon: <path d="M4 6h16v14H4zM4 10h16M9 3v4M15 3v4" /> },
-  { path: '/progreso', label: 'Progreso', icon: <path d="M4 19V5M4 19h16M8 15l4-5 3 3 4-6" /> },
-  { path: '/guia', label: 'Guía', icon: <path d="M5 4h10a4 4 0 0 1 4 4v12H9a4 4 0 0 1-4-4zM9 8h6M9 12h6" /> },
-  { path: '/ajustes', label: 'Ajustes', icon: <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM19 12a7 7 0 0 0-.1-1.2l2-1.6-2-3.4-2.4 1a7 7 0 0 0-2-1.2L14 3h-4l-.5 2.6a7 7 0 0 0-2 1.2l-2.4-1-2 3.4 2 1.6a7 7 0 0 0 0 2.4l-2 1.6 2 3.4 2.4-1a7 7 0 0 0 2 1.2L10 21h4l.5-2.6a7 7 0 0 0 2-1.2l2.4 1 2-3.4-2-1.6c.1-.4.1-.8.1-1.2z" /> },
+interface NavItem {
+  path: string;
+  label: string;
+  short?: string;
+  Icon: (p: { size?: number }) => ReactNode;
+  mobile?: boolean;
+}
+
+const NAV: NavItem[] = [
+  { path: '/', label: 'Inicio', Icon: IconHome, mobile: true },
+  { path: '/entrenamiento', label: 'Entrenamiento', short: 'Entreno', Icon: IconDumbbell, mobile: true },
+  { path: '/plan', label: 'Programa (13 semanas)', short: 'Programa', Icon: IconCalendar, mobile: true },
+  { path: '/progreso', label: 'Progreso', Icon: IconChart, mobile: true },
+  { path: '/medidas', label: 'Medidas', Icon: IconTape },
+  { path: '/historial', label: 'Historial', Icon: IconHistory },
+  { path: '/guia', label: 'Ejercicios', Icon: IconBook },
+  { path: '/ajustes', label: 'Ajustes', Icon: IconSettings, mobile: true },
 ];
+
+function activePath(route: string): string {
+  if (route.startsWith('/guia')) return '/guia';
+  if (route.startsWith('/coach')) return '/entrenamiento';
+  const hit = NAV.find((n) => n.path === route);
+  return hit ? hit.path : '/';
+}
+
+function Sidebar({ route }: { route: string }) {
+  const active = activePath(route);
+  return (
+    <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col overflow-hidden bg-gradient-to-b from-[var(--sidebar-from)] to-[var(--sidebar-to)] text-white lg:flex" aria-label="Menú principal">
+      <a href="#/" className="flex items-center gap-2 px-6 pb-6 pt-7 font-display text-xl font-bold">
+        <span className="text-[#c4b5fd]"><Logo /></span>
+        Mi Entrenamiento
+      </a>
+      <nav className="flex-1 px-3">
+        <ul className="flex flex-col gap-1">
+          {NAV.map(({ path, label, Icon }) => {
+            const on = active === path;
+            return (
+              <li key={path}>
+                <a
+                  href={`#${path}`}
+                  aria-current={on ? 'page' : undefined}
+                  className={`flex min-h-11 items-center gap-3 rounded-xl px-4 font-medium transition ${on ? 'bg-[#a78bfa] text-white shadow-lg' : 'text-white/85 hover:bg-white/10'}`}
+                >
+                  <Icon size={20} />
+                  {label}
+                </a>
+              </li>
+            );
+          })}
+        </ul>
+      </nav>
+      {/* Ondas decorativas */}
+      <svg viewBox="0 0 256 140" className="pointer-events-none mt-auto w-full opacity-60" aria-hidden>
+        <path d="M0 60 C60 20 120 100 256 50 V140 H0z" fill="#7c3aed" opacity="0.45" />
+        <path d="M0 95 C80 60 150 130 256 85 V140 H0z" fill="#a78bfa" opacity="0.35" />
+      </svg>
+    </aside>
+  );
+}
+
+function BottomNav({ route }: { route: string }) {
+  const active = activePath(route);
+  const items = NAV.filter((n) => n.mobile);
+  const mapped = ['/medidas', '/historial'].includes(active) ? '/progreso' : active === '/guia' ? '/entrenamiento' : active;
+  return (
+    <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur lg:hidden" aria-label="Navegación principal">
+      <ul className="mx-auto grid max-w-xl grid-cols-5">
+        {items.map(({ path, label, short, Icon }) => {
+          const on = mapped === path;
+          return (
+            <li key={path}>
+              <a href={`#${path}`} aria-current={on ? 'page' : undefined} className={`flex min-h-14 flex-col items-center justify-center gap-0.5 pt-2 text-[11px] font-semibold ${on ? 'text-primary' : 'text-muted'}`}>
+                <span className={`grid h-7 w-12 place-items-center rounded-full ${on ? 'bg-primary-soft' : ''}`}>
+                  <Icon size={21} />
+                </span>
+                {short ?? label}
+              </a>
+            </li>
+          );
+        })}
+      </ul>
+    </nav>
+  );
+}
 
 /** Muestra una notificación local si el entreno de hoy está pendiente después de la hora elegida. */
 async function maybeNotify() {
@@ -81,50 +162,35 @@ function Shell() {
   if (!settings.onboarded) return <Onboarding />;
 
   const coach = route.match(/^\/coach\/(.+)$/);
-  if (coach) return <CoachMode sessionId={decodeURIComponent(coach[1])} />;
-
   const guide = route.match(/^\/guia\/(.+)$/);
   let page: ReactNode;
-  if (route === '/' || route === '') page = <Dashboard />;
+  if (coach) page = null;
+  else if (route === '/entrenamiento') page = <TrainingView />;
   else if (route === '/plan') page = <CalendarView />;
   else if (route === '/progreso') page = <ProgressView />;
+  else if (route === '/medidas') page = <ProgressView initialTab="medidas" />;
   else if (route === '/historial') page = <HistoryView />;
   else if (route === '/ajustes') page = <SettingsView />;
   else if (route === '/guia') page = <GuideView />;
   else if (guide) page = <GuideView exerciseId={decodeURIComponent(guide[1])} />;
   else page = <Dashboard />;
 
-  const activeTab = route.startsWith('/guia') ? '/guia' : route === '/historial' ? '/progreso' : TABS.some((t) => t.path === route) ? route : '/';
-
   return (
     <div className="min-h-dvh">
       <a href="#main" className="sr-only focus:not-sr-only focus:absolute focus:left-2 focus:top-2 focus:z-50 focus:rounded-xl focus:bg-surface focus:p-3">
         Saltar al contenido
       </a>
-      <main id="main" className="safe-top mx-auto max-w-xl px-4 pb-32">
-        <div key={route} className="animate-in">{page}</div>
-      </main>
-      <nav className="safe-bottom fixed inset-x-0 bottom-0 z-30 border-t border-line bg-surface/95 backdrop-blur" aria-label="Navegación principal">
-        <ul className="mx-auto grid max-w-xl grid-cols-5">
-          {TABS.map((t) => {
-            const active = activeTab === t.path;
-            return (
-              <li key={t.path}>
-                <a
-                  href={`#${t.path}`}
-                  aria-current={active ? 'page' : undefined}
-                  className={`flex min-h-14 flex-col items-center justify-center gap-0.5 pt-2 text-xs font-semibold ${active ? 'text-sage-strong' : 'text-muted'}`}
-                >
-                  <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={active ? 2.2 : 1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden>
-                    {t.icon}
-                  </svg>
-                  {t.label}
-                </a>
-              </li>
-            );
-          })}
-        </ul>
-      </nav>
+      <Sidebar route={route} />
+      {coach ? (
+        <CoachMode sessionId={decodeURIComponent(coach[1])} />
+      ) : (
+        <main id="main" className="safe-top mx-auto max-w-xl px-4 pb-32 lg:ml-64 lg:max-w-none lg:px-8 lg:pb-12 lg:pt-8">
+          <div key={route} className="animate-in mx-auto max-w-6xl">
+            {page}
+          </div>
+        </main>
+      )}
+      {coach ? null : <BottomNav route={route} />}
     </div>
   );
 }

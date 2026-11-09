@@ -39,6 +39,20 @@ export const WEEK_SCHEDULE: DayKey[] = ['A', 'B', 'cardio', 'C', 'D', 'cardio', 
 export const WARMUP_MINUTES = 5;
 export const REST_OPTIONS = [45, 60, 90, 120] as const;
 
+/** Fases del programa (para la vista general y la progresión de series). */
+export const PHASES: { weeks: number[]; label: string; name: string }[] = [
+  { weeks: [1, 2], label: 'Sem 1–2', name: 'Técnica' },
+  { weeks: [3, 4], label: 'Sem 3–4', name: 'Resistencia' },
+  { weeks: [5], label: 'Sem 5', name: 'Recuperación' },
+  { weeks: [6, 7, 8], label: 'Sem 6–8', name: 'Fuerza' },
+  { weeks: [9], label: 'Sem 9', name: 'Recuperación' },
+  { weeks: [10, 11, 12, 13], label: 'Sem 10–13', name: 'Consolidación' },
+];
+
+export function phaseFor(week: number) {
+  return PHASES.find((p) => p.weeks.includes(week)) ?? PHASES[0];
+}
+
 /** Repeticiones en reserva objetivo. */
 export const RIR_TARGET = { min: 2, max: 3 } as const;
 
@@ -128,7 +142,7 @@ const BODY = rx('B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B', 'B')
 export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
   A: {
     key: 'A',
-    title: 'Fuerza A',
+    title: 'Piernas y Glúteos A',
     weekday: 'Lunes',
     focus: 'Glúteos y piernas (cadera dominante) · core',
     slots: [
@@ -141,7 +155,7 @@ export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
   },
   B: {
     key: 'B',
-    title: 'Fuerza B',
+    title: 'Espalda, Pecho y Brazos',
     weekday: 'Martes',
     focus: 'Espalda, pecho, hombros y brazos · core',
     slots: [
@@ -154,7 +168,7 @@ export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
   },
   C: {
     key: 'C',
-    title: 'Fuerza C',
+    title: 'Piernas y Glúteos B',
     weekday: 'Jueves',
     focus: 'Glúteos (unilateral y glúteo medio) · core lateral',
     slots: [
@@ -167,7 +181,7 @@ export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
   },
   D: {
     key: 'D',
-    title: 'Fuerza D',
+    title: 'Hombros, Espalda y Brazos',
     weekday: 'Viernes',
     focus: 'Espalda, hombros y brazos · glúteo unilateral',
     slots: [
@@ -181,15 +195,17 @@ export const PLAN_DAYS: Record<StrengthDay, PlanDay> = {
 };
 
 export const DAY_LABELS: Record<DayKey, string> = {
-  A: 'Fuerza A',
-  B: 'Fuerza B',
-  C: 'Fuerza C',
-  D: 'Fuerza D',
+  A: 'Piernas y Glúteos A',
+  B: 'Espalda, Pecho y Brazos',
+  C: 'Piernas y Glúteos B',
+  D: 'Hombros, Espalda y Brazos',
   cardio: 'Cardio',
   rest: 'Descanso',
 };
 
 export const DEFAULT_PROFILE = {
+  /** Nombre para el saludo (opcional). */
+  name: '',
   sex: 'mujer' as const,
   age: 36,
   heightFt: 5,

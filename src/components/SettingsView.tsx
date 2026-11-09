@@ -37,7 +37,7 @@ import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, Toggle, 
 function Section({ title, children, id }: { title: string; children: ReactNode; id: string }) {
   return (
     <Card aria-labelledby={id} className="mb-4">
-      <h2 id={id} className="mb-3 font-display text-xl font-semibold">{title}</h2>
+      <h2 id={id} className="mb-3 font-display text-lg font-semibold">{title}</h2>
       {children}
     </Card>
   );
@@ -62,7 +62,7 @@ export function SettingsView() {
 
   return (
     <div>
-      <PageHeader title="Ajustes" subtitle="Todo se guarda en este dispositivo" action={<a href="#/historial" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Historial →</a>} />
+      <PageHeader title="Ajustes" subtitle="Todo se guarda en este dispositivo" action={<a href="#/historial" className="min-h-11 py-2 text-sm font-semibold text-primary-600">Historial →</a>} />
       <nav aria-label="Secciones de ajustes" className="mb-4 flex flex-wrap gap-2 text-sm">
         {[
           ['s-perfil', 'Perfil'],
@@ -122,6 +122,9 @@ function ProfileSection({ profile }: { profile: Profile }) {
   const num = (k: keyof Profile) => (e: React.ChangeEvent<HTMLInputElement>) => setP({ ...p, [k]: Number(e.target.value) });
   return (
     <Section title="Perfil" id="s-perfil">
+      <div className="mb-3">
+        <Field label="Nombre (para el saludo, opcional)">{(id) => <input id={id} className={inputClass} value={p.name ?? ''} onChange={(e) => setP({ ...p, name: e.target.value })} autoComplete="given-name" />}</Field>
+      </div>
       <div className="grid grid-cols-2 gap-3">
         <Field label="Edad">{(id) => <input id={id} className={inputClass} type="number" inputMode="numeric" value={p.age} onChange={num('age')} />}</Field>
         <div className="grid grid-cols-2 gap-2">

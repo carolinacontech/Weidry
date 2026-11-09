@@ -13,7 +13,7 @@ import { Button, Card, Loading, Modal, Notice, PageHeader, useToast } from './ui
 
 const STATUS = { completed: 'Completada', in_progress: 'En curso', abandoned: 'Incompleta' } as const;
 
-export function HistoryView() {
+export function HistoryView({ embedded }: { embedded?: boolean }) {
   const sessions = useSessions();
   const settings = useSettings();
   const toast = useToast();
@@ -22,8 +22,7 @@ export function HistoryView() {
   const list = [...sessions].sort((a, b) => (b.date + b.startedAt).localeCompare(a.date + a.startedAt));
   return (
     <div>
-      <button type="button" onClick={() => history.back()} className="mb-2 min-h-11 font-semibold text-sage-strong">← Volver</button>
-      <PageHeader title="Historial" subtitle={`${list.filter((s) => s.status === 'completed').length} sesiones completadas`} />
+      {embedded ? null : <PageHeader title="Historial" subtitle={`${list.filter((s) => s.status === 'completed').length} sesiones completadas`} />}
       <Notice>Tus datos se guardan solo en este dispositivo. Haz una copia en Ajustes → Datos de vez en cuando.</Notice>
       {list.length === 0 ? <p className="mt-6 text-center text-muted">Aún no hay sesiones. ¡La primera es la más importante!</p> : null}
       <ul className="mt-4 flex flex-col gap-3">
@@ -41,10 +40,10 @@ export function HistoryView() {
                         </p>
                         <p className="text-sm text-muted">{formatLong(s.date)}</p>
                       </div>
-                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${s.status === 'completed' ? 'bg-sage-soft text-sage-strong' : 'bg-warn-soft text-warn'}`}>{STATUS[s.status]}</span>
+                      <span className={`rounded-full px-2 py-1 text-xs font-semibold ${s.status === 'completed' ? 'bg-primary-soft text-primary-600' : 'bg-warn-soft text-warn'}`}>{STATUS[s.status]}</span>
                     </div>
                     <p className="tabular mt-1 text-sm text-muted">
-                      {s.exercises.reduce((a, e) => a + e.sets.length, 0)} series · volumen {sessionVolume(s)} lb{minutes !== null ? ` · ${minutes} min` : ''} · <span className="text-sage-strong">ver detalle</span>
+                      {s.exercises.reduce((a, e) => a + e.sets.length, 0)} series · volumen {sessionVolume(s)} lb{minutes !== null ? ` · ${minutes} min` : ''} · <span className="text-primary-600">ver detalle</span>
                     </p>
                   </summary>
                   <ul className="mt-3 flex flex-col gap-2 text-sm">

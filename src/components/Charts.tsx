@@ -30,7 +30,7 @@ function niceRange(values: number[], refs: Ref[] = []): [number, number] {
 function DataTable({ points, unit, caption, extraCol }: { points: Point[]; unit: string; caption: string; extraCol?: { name: string; values: (number | null)[] } }) {
   return (
     <details className="mt-2 text-sm">
-      <summary className="min-h-11 cursor-pointer py-2 font-medium text-sage-strong">Ver datos en tabla</summary>
+      <summary className="min-h-11 cursor-pointer py-2 font-medium text-primary-600">Ver datos en tabla</summary>
       <table className="w-full text-left">
         <caption className="sr-only">{caption}</caption>
         <thead>
@@ -54,7 +54,7 @@ function DataTable({ points, unit, caption, extraCol }: { points: Point[]; unit:
   );
 }
 
-export function LineChart({ title, points, unit, refs = [], empty, height = 170 }: { title: string; points: Point[]; unit: string; refs?: Ref[]; empty?: ReactNode; height?: number }) {
+export function LineChart({ title, points, unit, refs = [], empty, height = 170, area }: { title: string; points: Point[]; unit: string; refs?: Ref[]; empty?: ReactNode; height?: number; area?: boolean }) {
   const id = useId();
   const valid = points.filter((p) => p.value !== null) as { label: string; value: number }[];
   if (valid.length === 0) return <div className="rounded-2xl bg-surface-2 p-4 text-sm text-muted">{empty ?? 'Aún no hay datos.'}</div>;
@@ -85,13 +85,27 @@ export function LineChart({ title, points, unit, refs = [], empty, height = 170 
         ))}
         {refs.map((r) => (
           <g key={r.label}>
-            <line x1={m.l} x2={W - m.r} y1={y(r.value)} y2={y(r.value)} stroke="var(--clay)" strokeWidth="1.5" strokeDasharray="5 4" />
-            <text x={W - m.r} y={y(r.value) - 4} textAnchor="end" fontSize="10" fill="var(--clay)">{r.label}</text>
+            <line x1={m.l} x2={W - m.r} y1={y(r.value)} y2={y(r.value)} stroke="var(--accent)" strokeWidth="1.5" strokeDasharray="5 4" />
+            <text x={W - m.r} y={y(r.value) - 4} textAnchor="end" fontSize="10" fill="var(--accent)">{r.label}</text>
           </g>
         ))}
-        <polyline points={path} fill="none" stroke="var(--sage)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
+        {area && valid.length > 1 ? (
+          <>
+            <defs>
+              <linearGradient id={`g${id.replace(/[^a-zA-Z0-9_-]/g, '')}`} x1="0" x2="0" y1="0" y2="1">
+                <stop offset="0%" stopColor="var(--primary)" stopOpacity="0.28" />
+                <stop offset="100%" stopColor="var(--primary)" stopOpacity="0" />
+              </linearGradient>
+            </defs>
+            <polygon
+              points={`${path} ${x(points.map((p, i) => (p.value === null ? -1 : i)).filter((i) => i >= 0).pop()!)},${H - m.b} ${x(points.findIndex((p) => p.value !== null))},${H - m.b}`}
+              fill={`url(#g${id.replace(/[^a-zA-Z0-9_-]/g, '')})`}
+            />
+          </>
+        ) : null}
+        <polyline points={path} fill="none" stroke="var(--primary)" strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />
         {points.map((p, i) =>
-          p.value === null ? null : <circle key={i} cx={x(i)} cy={y(p.value)} r="3.5" fill="var(--surface)" stroke="var(--sage)" strokeWidth="2" />,
+          p.value === null ? null : <circle key={i} cx={x(i)} cy={y(p.value)} r="3.5" fill="var(--primary)" stroke="var(--surface)" strokeWidth="2" />,
         )}
         {points.map((p, i) =>
           i % step === 0 || i === points.length - 1 ? (
@@ -132,8 +146,8 @@ export function BarChart({ title, points, unit, targets, highlightIndex }: { tit
           const tgt = targets?.[i];
           return (
             <g key={i}>
-              <rect x={x} y={y(v)} width={w} height={Math.max(0, y(0) - y(v))} rx="3" fill={i === highlightIndex ? 'var(--sage-strong)' : 'var(--sage)'} opacity={i === highlightIndex ? 1 : 0.8} />
-              {tgt ? <line x1={x - 2} x2={x + w + 2} y1={y(tgt)} y2={y(tgt)} stroke="var(--clay)" strokeWidth="2" strokeDasharray="3 2" /> : null}
+              <rect x={x} y={y(v)} width={w} height={Math.max(0, y(0) - y(v))} rx="3" fill={i === highlightIndex ? 'var(--primary-600)' : 'var(--primary)'} opacity={i === highlightIndex ? 1 : 0.8} />
+              {tgt ? <line x1={x - 2} x2={x + w + 2} y1={y(tgt)} y2={y(tgt)} stroke="var(--accent)" strokeWidth="2" strokeDasharray="3 2" /> : null}
               <text x={x + w / 2} y={H - 8} textAnchor="middle" fontSize="10" fill="var(--muted)">{p.label}</text>
             </g>
           );

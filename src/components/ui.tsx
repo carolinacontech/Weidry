@@ -3,9 +3,9 @@ import { createContext, useCallback, useContext, useEffect, useId, useRef, useSt
 type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'soft';
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-sage text-on-sage hover:bg-sage-strong active:scale-[0.98] shadow-sm',
-  secondary: 'bg-surface text-ink border border-line hover:bg-surface-2 active:scale-[0.98]',
-  soft: 'bg-sage-soft text-ink hover:brightness-95 active:scale-[0.98]',
+  primary: 'bg-primary text-on-primary hover:bg-primary-600 active:scale-[0.98] shadow-[0_6px_16px_rgba(109,40,217,0.25)]',
+  secondary: 'bg-surface text-primary border border-primary/40 hover:bg-primary-soft active:scale-[0.98]',
+  soft: 'bg-primary-soft text-ink hover:brightness-95 active:scale-[0.98]',
   ghost: 'bg-transparent text-ink hover:bg-surface-2',
   danger: 'bg-danger-soft text-danger border border-danger/30 hover:brightness-95 active:scale-[0.98]',
 };
@@ -22,7 +22,7 @@ export function Button({
   return (
     <button
       type="button"
-      className={`inline-flex items-center justify-center gap-2 rounded-2xl font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-2 rounded-xl font-display font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${sizes[size]} ${VARIANTS[variant]} ${className}`}
       aria-busy={loading || undefined}
       {...rest}
       disabled={rest.disabled || loading}
@@ -45,7 +45,7 @@ export function Spinner({ label }: { label?: string }) {
 export function Loading({ label = 'Cargando…' }: { label?: string }) {
   return (
     <div className="flex min-h-[40vh] items-center justify-center gap-3 text-muted" role="status">
-      <span className="h-6 w-6 animate-spin rounded-full border-2 border-sage border-t-transparent" aria-hidden />
+      <span className="h-6 w-6 animate-spin rounded-full border-2 border-primary border-t-transparent" aria-hidden />
       {label}
     </div>
   );
@@ -53,7 +53,7 @@ export function Loading({ label = 'Cargando…' }: { label?: string }) {
 
 export function Card({ children, className = '', as: As = 'section', ...rest }: { children: ReactNode; className?: string; as?: 'section' | 'div' | 'article'; 'aria-labelledby'?: string; 'aria-label'?: string }) {
   return (
-    <As className={`rounded-3xl border border-line bg-surface p-4 shadow-[0_1px_2px_rgba(0,0,0,0.04)] ${className}`} {...rest}>
+    <As className={`rounded-2xl border border-line/70 bg-surface p-5 shadow-card ${className}`} {...rest}>
       {children}
     </As>
   );
@@ -63,7 +63,7 @@ export function PageHeader({ title, subtitle, action }: { title: string; subtitl
   return (
     <header className="mb-4 flex items-end justify-between gap-3">
       <div>
-        <h1 className="font-display text-3xl font-semibold tracking-tight">{title}</h1>
+        <h1 className="font-display text-2xl font-bold tracking-tight sm:text-3xl">{title}</h1>
         {subtitle ? <p className="mt-1 text-muted">{subtitle}</p> : null}
       </div>
       {action}
@@ -77,7 +77,7 @@ export function Chip({ selected, children, onClick, className = '', ...rest }: {
       type="button"
       aria-pressed={selected}
       onClick={onClick}
-      className={`min-h-11 rounded-full border px-4 text-sm font-semibold transition ${selected ? 'border-sage bg-sage text-on-sage' : 'border-line bg-surface text-ink hover:bg-surface-2'} disabled:opacity-50 ${className}`}
+      className={`min-h-11 rounded-full border px-4 text-sm font-semibold transition ${selected ? 'border-primary bg-primary text-on-primary' : 'border-line bg-surface text-ink hover:bg-primary-soft'} disabled:opacity-50 ${className}`}
       {...rest}
     >
       {children}
@@ -102,7 +102,7 @@ export function Toggle({ checked, onChange, label, description, disabled }: { ch
         aria-checked={checked}
         disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-8 w-14 shrink-0 rounded-full transition disabled:opacity-50 ${checked ? 'bg-sage' : 'bg-line'}`}
+        className={`relative h-8 w-14 shrink-0 rounded-full transition disabled:opacity-50 ${checked ? 'bg-primary' : 'bg-line'}`}
       >
         <span className={`absolute top-1 h-6 w-6 rounded-full bg-white shadow transition-all ${checked ? 'left-7' : 'left-1'}`} />
       </button>
@@ -190,8 +190,8 @@ export function ProgressRing({ value, size = 64, stroke = 7, label, children }: 
   return (
     <div className="relative inline-grid place-items-center" style={{ width: size, height: size }} role="img" aria-label={label}>
       <svg width={size} height={size} className="-rotate-90" aria-hidden>
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--line)" strokeWidth={stroke} />
-        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--sage)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v)} style={{ transition: 'stroke-dashoffset .4s ease' }} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--primary-soft)" strokeWidth={stroke} />
+        <circle cx={size / 2} cy={size / 2} r={r} fill="none" stroke="var(--primary)" strokeWidth={stroke} strokeLinecap="round" strokeDasharray={c} strokeDashoffset={c * (1 - v)} style={{ transition: 'stroke-dashoffset .4s ease' }} />
       </svg>
       <div className="absolute inset-0 grid place-items-center text-center">{children}</div>
     </div>
@@ -200,10 +200,10 @@ export function ProgressRing({ value, size = 64, stroke = 7, label, children }: 
 
 export function Notice({ tone = 'info', children, title }: { tone?: 'info' | 'warn' | 'danger' | 'success'; children: ReactNode; title?: string }) {
   const tones = {
-    info: 'bg-surface-2 border-line',
+    info: 'bg-primary-soft/60 border-primary/15',
     warn: 'bg-warn-soft border-warn/30',
     danger: 'bg-danger-soft border-danger/30',
-    success: 'bg-sage-soft border-sage/30',
+    success: 'bg-success-soft border-success/30',
   };
   return (
     <div className={`rounded-2xl border p-3 text-sm ${tones[tone]}`} role={tone === 'danger' ? 'alert' : undefined}>
@@ -236,7 +236,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         {toasts.map((t) => (
           <div
             key={t.id}
-            className={`animate-in pointer-events-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg ${t.tone === 'error' ? 'bg-danger text-white' : t.tone === 'info' ? 'bg-ink text-bg' : 'bg-sage text-on-sage'}`}
+            className={`animate-in pointer-events-auto max-w-md rounded-2xl px-4 py-3 text-sm font-semibold shadow-lg ${t.tone === 'error' ? 'bg-danger text-white' : t.tone === 'info' ? 'bg-ink text-bg' : 'bg-primary text-on-primary'}`}
           >
             {t.text}
           </div>
@@ -261,4 +261,24 @@ export function Field({ label, children, hint }: { label: string; children: (id:
   );
 }
 
-export const inputClass = 'min-h-12 w-full rounded-2xl border border-line bg-surface px-4 text-base text-ink placeholder:text-muted/70 focus:border-sage';
+export const inputClass = 'min-h-12 w-full rounded-2xl border border-line bg-surface px-4 text-base text-ink placeholder:text-muted/70 focus:border-primary';
+
+/** Pestañas tipo "segmento" (contenedor lavanda, pestaña activa morada). */
+export function Tabs<T extends string>({ tabs, value, onChange, label }: { tabs: [T, string][]; value: T; onChange: (v: T) => void; label: string }) {
+  return (
+    <div role="tablist" aria-label={label} className="flex gap-1 overflow-x-auto rounded-2xl border border-line bg-surface p-1 shadow-card">
+      {tabs.map(([k, l]) => (
+        <button
+          key={k}
+          type="button"
+          role="tab"
+          aria-selected={value === k}
+          onClick={() => onChange(k)}
+          className={`min-h-10 flex-1 shrink-0 whitespace-nowrap rounded-xl px-4 text-sm font-semibold transition ${value === k ? 'bg-primary text-on-primary shadow' : 'text-ink hover:bg-primary-soft'}`}
+        >
+          {l}
+        </button>
+      ))}
+    </div>
+  );
+}

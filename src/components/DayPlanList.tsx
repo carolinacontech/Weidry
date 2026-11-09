@@ -33,7 +33,7 @@ export function DayPlanList({
                 <a href={`#/guia/${ex.id}`} className="font-medium hover:underline">
                   {ex.nameEs}
                 </a>
-                {ex.glute ? <span className="ml-1 rounded-full bg-clay-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-clay">glúteo</span> : null}
+                {ex.glute ? <span className="ml-1 rounded-full bg-accent-soft px-1.5 py-0.5 text-[10px] font-semibold uppercase text-accent">glúteo</span> : null}
                 <p className="text-sm text-muted">
                   {setsFor(slot, week)} × {ex.reps}
                 </p>

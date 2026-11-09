@@ -17,7 +17,8 @@ import { COMMAND_HELP, createListener, speechRecognitionSupported, type Listener
 import { compareOptions, formatOption, formatOptionShort, ladderFor, nearestAtOrBelow, optionIndex, sameOption, type InventoryItem, type LoadOption } from '../lib/weights';
 import { ExerciseIllustration } from './ExerciseIllustration';
 import { GuideContent } from './GuideView';
-import { RestTimer } from './RestTimer';
+import { RestCard } from './RestCard';
+import { IconArrowLeft, IconArrowRight, IconCheck, IconDumbbell, IconExpand, IconInfo, IconMic, IconMore, IconPlay, IconVolume, IconVolumeOff } from './icons';
 import { Button, Chip, Loading, Modal, Notice, ProgressRing, Stepper, Toggle, inputClass, useToast } from './ui';
 
 const CUE_SPEECH: Partial<Record<Cue, string>> = {
@@ -85,6 +86,7 @@ function Coach({
   const [showVoiceHelp, setShowVoiceHelp] = useState(false);
   const [painOpen, setPainOpen] = useState(false);
   const [confirmExit, setConfirmExit] = useState(false);
+  const [showMenu, setShowMenu] = useState(false);
   const active = s.status === 'in_progress';
   const wake = useWakeLock(settings.wakeLock && active && !s.paused);
 
@@ -283,24 +285,35 @@ function Coach({
     return () => l.stop();
   }, [voiceCmdOn]);
 
-  const nextLabel = (() => {
-    const l = s.exercises[s.exerciseIndex];
-    return `${exerciseName(l)} · Serie ${Math.min(l.sets.length + 1, l.plannedSets)} de ${l.plannedSets}`;
-  })();
+  const doneCount = s.exercises.filter((e) => e.status !== 'pending').length;
+  const videoUrl = !log.substitute ? settings.videoLinks[ex.id] : undefined;
+  const directVideo = videoUrl && /\.(mp4|webm|mov|m4v)(\?.*)?$/i.test(videoUrl);
+  const fullscreenOk = typeof document !== 'undefined' && document.fullscreenEnabled;
+  const headerBtn = 'grid h-11 w-11 place-items-center rounded-full text-ink hover:bg-primary-soft';
+  const workLike = s.phase === 'work' || s.phase === 'rest';
 
   return (
-    <div ref={scroller} className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-bg">
-      <header className="safe-top sticky top-0 z-10 border-b border-line bg-bg/95 px-4 pb-3 backdrop-blur">
-        <div className="mx-auto flex max-w-xl items-center justify-between gap-2">
-          <button type="button" onClick={() => setConfirmExit(true)} className="min-h-11 rounded-full px-3 font-semibold text-sage-strong hover:bg-surface-2" aria-label="Salir del modo coach">
-            ✕ Salir
+    <div ref={scroller} className="fixed inset-0 z-40 flex flex-col overflow-y-auto bg-bg lg:left-64">
+      <header className="safe-top sticky top-0 z-10 border-b border-line bg-bg/95 px-4 pb-2 backdrop-blur">
+        <div className="mx-auto flex max-w-5xl items-center justify-between gap-2">
+          <button type="button" onClick={() => setConfirmExit(true)} className="flex min-h-11 items-center gap-2 rounded-full pr-3 font-display font-semibold hover:bg-primary-soft" aria-label="Salir del modo coach">
+            <IconArrowLeft /> Entrenamiento
           </button>
-          <div className="text-center">
-            <p className="font-display text-lg font-semibold leading-tight">{DAY_LABELS[s.dayKey]}</p>
-            <p className="text-xs text-muted">Semana {s.week} · {prog.done}/{prog.total} series</p>
-          </div>
           {s.phase !== 'summary' ? (
             <div className="flex items-center">
+              <button
+                type="button"
+                className={headerBtn}
+                onClick={() => {
+                  unlockAudio();
+                  setMuted((m) => !m);
+                  stopSpeaking();
+                }}
+                aria-pressed={muted}
+                aria-label={muted ? 'Activar sonido y voz' : 'Silenciar sonido y voz'}
+              >
+                {muted ? <IconVolumeOff /> : <IconVolume />}
+              </button>
               <button
                 type="button"
                 onClick={() => {
@@ -311,25 +324,30 @@ function Coach({
                 }}
                 aria-pressed={settings.voiceCommands}
                 aria-label={settings.voiceCommands ? 'Desactivar comandos de voz' : 'Activar comandos de voz'}
-                className={`h-11 w-11 rounded-full text-lg ${settings.voiceCommands ? (listenState === 'listening' ? 'bg-sage text-on-sage' : 'bg-warn-soft') : 'hover:bg-surface-2'}`}
+                className={`${headerBtn} ${settings.voiceCommands ? (listenState === 'listening' ? '!bg-primary !text-on-primary' : '!bg-warn-soft') : ''}`}
               >
-                🎙
+                <IconMic />
               </button>
-              <button type="button" onClick={() => setPaused(!s.paused)} className="min-h-11 rounded-full px-3 font-semibold text-sage-strong hover:bg-surface-2" aria-pressed={!!s.paused}>
-                {s.paused ? '▶ Seguir' : '⏸ Pausa'}
+              {fullscreenOk ? (
+                <button
+                  type="button"
+                  className={headerBtn}
+                  aria-label="Pantalla completa"
+                  onClick={() => (document.fullscreenElement ? document.exitFullscreen() : document.documentElement.requestFullscreen()).catch(() => undefined)}
+                >
+                  <IconExpand />
+                </button>
+              ) : null}
+              <button type="button" className={headerBtn} onClick={() => setShowMenu(true)} aria-label="Más opciones">
+                <IconMore />
               </button>
             </div>
-          ) : (
-            <span className="w-16" />
-          )}
-        </div>
-        <div className="mx-auto mt-2 h-1.5 max-w-xl overflow-hidden rounded-full bg-line" role="progressbar" aria-label="Progreso de la sesión" aria-valuemin={0} aria-valuemax={prog.total} aria-valuenow={prog.done}>
-          <div className="h-full bg-sage transition-all" style={{ width: `${prog.total ? (prog.done / prog.total) * 100 : 0}%` }} />
+          ) : null}
         </div>
         {settings.voiceCommands && s.phase !== 'summary' ? (
-          <p className="mx-auto mt-1 max-w-xl text-center text-xs text-muted" aria-live="polite">
+          <p className="mx-auto max-w-5xl text-xs text-muted" aria-live="polite">
             {listenState === 'listening'
-              ? 'Escuchando: “listo”, “pausa”, “siguiente”, “saltar”, “más tiempo”…'
+              ? '🎙 Escuchando: “listo”, “pausa”, “siguiente”, “saltar”, “más tiempo”…'
               : listenState === 'denied'
                 ? 'Micrófono bloqueado: actívalo en los ajustes del navegador.'
                 : listenState === 'unsupported'
@@ -339,7 +357,24 @@ function Coach({
         ) : null}
       </header>
 
-      <main className="safe-bottom mx-auto flex w-full max-w-xl flex-1 flex-col px-4 py-4">
+      <main className="safe-bottom mx-auto flex w-full max-w-5xl flex-1 flex-col gap-5 px-4 py-5">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div>
+            <h1 className="font-display text-2xl font-bold">{DAY_LABELS[s.dayKey]}</h1>
+            <p className="text-sm text-muted">
+              Semana {s.week} · ~{35 + s.exercises[0].plannedSets * 5} min · {prog.done}/{prog.total} series
+            </p>
+          </div>
+          <div className="w-44">
+            <p className="mb-1 text-right text-sm font-medium">
+              {Math.min(s.exerciseIndex + 1, s.exercises.length)} de {s.exercises.length} ejercicios
+            </p>
+            <div className="h-2 overflow-hidden rounded-full bg-primary-soft" role="progressbar" aria-label="Progreso de la sesión" aria-valuemin={0} aria-valuemax={prog.total} aria-valuenow={prog.done}>
+              <div className="h-full rounded-full bg-primary transition-all" style={{ width: `${prog.total ? (prog.done / prog.total) * 100 : 0}%` }} />
+            </div>
+          </div>
+        </div>
+
         {s.phase === 'warmup' ? (
           <Warmup
             onDone={() => {
@@ -352,135 +387,135 @@ function Coach({
           />
         ) : null}
 
-        {s.phase === 'rest' && s.rest ? (
-          <RestTimer
-            timer={s.rest}
-            now={now}
-            nextLabel={nextLabel}
-            muted={muted}
-            onToggleMute={() => {
-              unlockAudio();
-              setMuted((m) => !m);
-              stopSpeaking();
-            }}
-            onPause={() => setRest((r) => pause(r, Date.now()))}
-            onResume={() => {
-              unlockAudio();
-              setRest((r) => resume(r, Date.now()));
-            }}
-            onAdd={(sec) => setRest((r) => addTime(r, sec, Date.now()))}
-            onSetDuration={(sec) => setRest(() => start(createTimer(sec), Date.now()))}
-            onSkip={() => {
-              unlockAudio();
-              finishRest();
-            }}
-          />
-        ) : null}
+        {workLike ? (
+          <>
+            <div className="grid gap-5 lg:grid-cols-[1.15fr_1fr]">
+              {/* Visual */}
+              <div className="relative aspect-[4/3] overflow-hidden rounded-2xl bg-gradient-to-br from-[#f3edff] to-[#d8c8fb] shadow-card dark:from-[#2a1d44] dark:to-[#3b2a63]">
+                {directVideo ? (
+                  <video src={videoUrl} controls playsInline preload="metadata" className="h-full w-full bg-black object-contain" aria-label={`Video de ${ex.nameEs}`} />
+                ) : (
+                  <>
+                    {!log.substitute ? <ExerciseIllustration pattern={guide.pattern} label={ex.nameEs} className="h-full w-full !bg-transparent" /> : <div className="grid h-full place-items-center p-6 text-center font-display text-lg font-semibold text-primary">{name}</div>}
+                    <button
+                      type="button"
+                      onClick={() => (videoUrl ? window.open(videoUrl, '_blank', 'noopener') : setShowGuide(true))}
+                      className="absolute left-1/2 top-1/2 grid h-16 w-16 -translate-x-1/2 -translate-y-1/2 place-items-center rounded-full bg-black/45 text-white backdrop-blur hover:bg-black/60"
+                      aria-label={videoUrl ? 'Abrir tu video de referencia' : 'Ver técnica y añadir tu video'}
+                    >
+                      <IconPlay size={28} />
+                    </button>
+                  </>
+                )}
+              </div>
 
-        {s.phase === 'work' ? (
-          <div className="flex flex-col gap-4">
-            <div className="flex items-start justify-between gap-3">
-              <div>
-                <p className="text-sm font-semibold text-sage-strong">
-                  Ejercicio {s.exerciseIndex + 1} de {s.exercises.length}
-                  {ex.glute ? ' · glúteo' : ''}
-                  {log.status === 'done' ? ' · completado' : log.status === 'skipped' ? ' · omitido' : ''}
+              {/* Detalle del ejercicio */}
+              <div className="flex flex-col gap-3">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <h2 className="font-display text-2xl font-bold leading-tight">{name}</h2>
+                    <p className="text-sm text-muted">{log.substitute ? `Sustituye a: ${ex.nameEs}` : ex.name}</p>
+                  </div>
+                  <button type="button" onClick={() => setShowGuide(true)} className="grid h-11 w-11 shrink-0 place-items-center rounded-full text-muted hover:bg-primary-soft" aria-label="Ver guía de técnica">
+                    <IconInfo />
+                  </button>
+                </div>
+                {!log.substitute ? <span className="w-fit rounded-full bg-primary-soft px-3 py-1 text-xs font-semibold text-primary">{guide.muscles.split(',').slice(0, 2).join(' · ')}</span> : null}
+                <p className="text-lg">
+                  <strong className="font-display">{log.plannedSets}</strong> series × {ex.timed ? ex.reps : `${ex.reps} rep`}
                 </p>
-                <h1 className="font-display text-3xl font-semibold leading-tight">{name}</h1>
-                <p className="text-sm text-muted">{log.substitute ? `Sustituye a: ${ex.nameEs}` : ex.name}</p>
-              </div>
-              <ProgressRing value={log.sets.length / log.plannedSets} size={62} label={`Serie ${setNumber} de ${log.plannedSets}`}>
-                <span className="tabular text-sm font-bold">{Math.min(log.sets.length, log.plannedSets)}/{log.plannedSets}</span>
-              </ProgressRing>
-            </div>
-
-            {!log.substitute ? <ExerciseIllustration pattern={guide.pattern} label={ex.nameEs} className="aspect-[16/10]" /> : null}
-
-            <div className="grid grid-cols-2 gap-2 text-center">
-              <div className="rounded-2xl bg-surface-2 p-3">
-                <p className="text-xs text-muted">Objetivo</p>
-                <p className="font-semibold">{ex.timed ? ex.reps : `${ex.reps} reps`}</p>
-                <p className="text-xs text-muted">con {RIR_TARGET.min}–{RIR_TARGET.max} en reserva</p>
-              </div>
-              <div className="rounded-2xl bg-surface-2 p-3">
-                <p className="text-xs text-muted">Propuesta (si la técnica lo permite)</p>
-                <p className="font-semibold leading-tight">{formatOption(log.substitute ? { kind: 'body', lb: 0 } : plannedOptionOf(log), mode, settings.unit)}</p>
+                <p className="flex w-fit items-center gap-2 rounded-xl bg-primary-soft px-3 py-2 text-sm font-semibold text-primary">
+                  <IconDumbbell size={18} />
+                  {formatOption(log.substitute ? { kind: 'body', lb: 0 } : plannedOptionOf(log), mode, settings.unit)}
+                </p>
+                <p className="text-xs text-muted">
+                  Propuesta condicionada a tu técnica y a terminar con {RIR_TARGET.min}–{RIR_TARGET.max} repeticiones en reserva.
+                </p>
+                {!log.substitute && guide ? (
+                  <ul className="list-disc space-y-1 pl-5 text-sm text-muted">
+                    {guide.cues.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                ) : null}
               </div>
             </div>
 
-            {!log.substitute && guide ? (
-              <details className="rounded-2xl border border-line bg-surface p-3">
-                <summary className="min-h-8 cursor-pointer font-semibold">Claves de técnica</summary>
-                <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">
-                  {guide.steps.map((t) => (
-                    <li key={t}>{t}</li>
-                  ))}
-                </ul>
-                <Button variant="ghost" size="sm" className="mt-2" onClick={() => setShowGuide(true)}>
-                  Ver guía completa y video
+            <div className="grid gap-5 lg:grid-cols-[1fr_300px]">
+              <div className="flex flex-col gap-4">
+                <SetsTable log={log} ex={ex} mode={mode} unit={settings.unit} />
+                {log.status === 'skipped' ? <Notice>Este ejercicio está omitido. Puedes registrar una serie igualmente o pasar al siguiente.</Notice> : null}
+                <SetLogger
+                  key={`${s.exerciseIndex}-${log.sets.length}-${log.substitute?.id ?? ''}`}
+                  ex={ex}
+                  log={log}
+                  mode={mode}
+                  inventory={inventory}
+                  settings={settings}
+                  soundOn={soundOn}
+                  onComplete={completeSet}
+                  registerSubmit={(fn) => (submitRef.current = fn)}
+                />
+              </div>
+              <div className="flex flex-col gap-3">
+                <RestCard
+                  timer={s.phase === 'rest' && s.rest ? s.rest : null}
+                  defaultSec={restDurationFor(ex)}
+                  now={now}
+                  onStart={(sec) => {
+                    unlockAudio();
+                    commit({ ...sRef.current, phase: 'rest', rest: start(createTimer(sec), Date.now()) });
+                  }}
+                  onPause={() => setRest((r) => pause(r, Date.now()))}
+                  onResume={() => {
+                    unlockAudio();
+                    setRest((r) => resume(r, Date.now()));
+                  }}
+                  onRestart={() => setRest((r) => start(createTimer(r.durationMs / 1000), Date.now()))}
+                  onAdd={(sec) => (sRef.current.rest ? setRest((r) => addTime(r, sec, Date.now())) : undefined)}
+                  onSetDuration={(sec) => {
+                    unlockAudio();
+                    commit({ ...sRef.current, phase: 'rest', rest: start(createTimer(sec), Date.now()) });
+                  }}
+                  onSkip={() => {
+                    unlockAudio();
+                    finishRest();
+                  }}
+                />
+                <Button variant="ghost" onClick={() => goToSummary(sRef.current)}>
+                  Terminar sesión
                 </Button>
-              </details>
-            ) : null}
-
-            {log.status === 'done' || log.status === 'skipped' ? (
-              <Notice tone="success">
-                {log.status === 'done' ? 'Ya completaste este ejercicio.' : 'Este ejercicio está omitido.'} Puedes añadir otra serie o pasar al siguiente.
-              </Notice>
-            ) : null}
-
-            <SetLogger
-              key={`${s.exerciseIndex}-${log.sets.length}-${log.substitute?.id ?? ''}`}
-              ex={ex}
-              log={log}
-              mode={mode}
-              inventory={inventory}
-              settings={settings}
-              soundOn={soundOn}
-              onComplete={completeSet}
-              registerSubmit={(fn) => (submitRef.current = fn)}
-            />
-
-            {log.sets.length > 0 ? (
-              <div className="rounded-2xl bg-surface-2 p-3 text-sm">
-                <p className="mb-1 font-semibold">Series registradas</p>
-                <ul className="space-y-1">
-                  {log.sets.map((st) => (
-                    <li key={st.setNumber} className="tabular flex justify-between gap-2">
-                      <span>
-                        Serie {st.setNumber}: {st.reps} {ex.timed && !log.substitute ? 's' : 'reps'} · {formatOptionShort(setOption(st), st.mode ?? mode, settings.unit)}
-                        {st.tempo === 'lento' ? ' · tempo lento' : ''}
-                      </span>
-                      <span className="text-muted">{st.pain ? 'dolor' : st.rir !== undefined && st.rir !== null ? `RIR ${rirLabel(st.rir)}` : ''}</span>
-                    </li>
-                  ))}
-                </ul>
               </div>
-            ) : null}
+            </div>
 
-            <nav className="grid grid-cols-2 gap-2" aria-label="Controles del ejercicio">
+            <nav className="flex items-center justify-between gap-3 border-t border-line pt-4" aria-label="Cambiar de ejercicio">
               <Button variant="secondary" onClick={() => move(-1)} disabled={s.exerciseIndex === 0}>
-                ← Anterior
+                <IconArrowLeft size={18} /> Anterior
               </Button>
-              <Button variant="secondary" onClick={() => move(1)} disabled={s.exerciseIndex === s.exercises.length - 1}>
-                Siguiente →
-              </Button>
-              <Button variant="soft" onClick={() => setShowSubstitute(true)}>
-                ⇄ Sustituir
-              </Button>
-              <Button variant="soft" onClick={skipExercise}>
-                ⤼ Omitir
+              <ol className="flex items-center gap-2" aria-label={`${doneCount} de ${s.exercises.length} ejercicios terminados`}>
+                {s.exercises.map((e, i) => (
+                  <li key={e.exerciseId}>
+                    <button
+                      type="button"
+                      onClick={() => move(i - sRef.current.exerciseIndex)}
+                      className={`block h-2.5 rounded-full transition-all ${i === s.exerciseIndex ? 'w-6 bg-primary' : e.status === 'done' ? 'w-2.5 bg-success' : e.status === 'skipped' ? 'w-2.5 bg-muted/40' : 'w-2.5 bg-primary-soft'}`}
+                      aria-label={`Ir a ${exerciseName(e)}${e.status === 'done' ? ' (hecho)' : ''}`}
+                      aria-current={i === s.exerciseIndex ? 'step' : undefined}
+                    />
+                  </li>
+                ))}
+              </ol>
+              <Button onClick={() => move(1)} disabled={s.exerciseIndex === s.exercises.length - 1}>
+                Siguiente <IconArrowRight size={18} />
               </Button>
             </nav>
-            <Button variant="ghost" onClick={() => goToSummary(sRef.current)}>
-              Terminar sesión ahora
-            </Button>
-          </div>
+          </>
         ) : null}
 
         {s.phase === 'summary' ? <Summary session={s} commit={commit} settings={settings} inventory={inventory} /> : null}
 
         {settings.wakeLock && active && s.phase !== 'summary' ? (
-          <p className="mt-4 text-center text-xs text-muted">
+          <p className="text-center text-xs text-muted">
             {wake.supported
               ? wake.locked
                 ? 'Pantalla mantenida encendida durante el entreno.'
@@ -489,6 +524,17 @@ function Coach({
           </p>
         ) : null}
       </main>
+
+      <Modal open={showMenu} onClose={() => setShowMenu(false)} title="Opciones">
+        <div className="grid gap-2">
+          <Button variant="secondary" onClick={() => { setShowMenu(false); setPaused(true); }}>⏸ Pausar sesión</Button>
+          <Button variant="secondary" onClick={() => { setShowMenu(false); setShowSubstitute(true); }}>⇄ Sustituir ejercicio</Button>
+          <Button variant="secondary" onClick={() => { setShowMenu(false); skipExercise(); }}>⤼ Omitir ejercicio</Button>
+          <Button variant="secondary" onClick={() => { setShowMenu(false); setShowGuide(true); }}>Ver guía de técnica y video</Button>
+          <Button variant="secondary" onClick={() => { setShowMenu(false); setShowVoiceHelp(true); }}>🎙 Comandos de voz</Button>
+          <Button variant="danger" onClick={() => { setShowMenu(false); goToSummary(sRef.current); }}>Terminar sesión</Button>
+        </div>
+      </Modal>
 
       {s.paused ? (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center gap-6 bg-bg/95 p-6 text-center backdrop-blur" role="dialog" aria-modal="true" aria-labelledby="paused-title">
@@ -527,7 +573,7 @@ function Coach({
         <ul className="flex flex-col gap-2">
           {guide.alternatives.map((a) => (
             <li key={a.id}>
-              <button type="button" onClick={() => substitute(a)} className={`w-full rounded-2xl border p-3 text-left hover:bg-surface-2 ${log.substitute?.id === a.id ? 'border-sage bg-sage-soft' : 'border-line bg-surface'}`}>
+              <button type="button" onClick={() => substitute(a)} className={`w-full rounded-2xl border p-3 text-left hover:bg-surface-2 ${log.substitute?.id === a.id ? 'border-primary bg-primary-soft' : 'border-line bg-surface'}`}>
                 <p className="font-semibold">{a.name}</p>
                 <p className="text-sm text-muted">{a.why}</p>
               </button>
@@ -572,6 +618,53 @@ function Coach({
         <p>Todo lo registrado ya está guardado en este dispositivo. Podrás reanudar la sesión desde Inicio.</p>
       </Modal>
     </div>
+  );
+}
+
+// ---------- Tabla de series ----------
+
+function SetsTable({ log, ex, mode, unit }: { log: ExerciseLog; ex: Exercise; mode: Mode; unit: Settings['unit'] }) {
+  const rows = Math.max(log.plannedSets, log.sets.length + (log.status === 'pending' ? 1 : 0));
+  const planned = log.substitute ? ({ kind: 'body', lb: 0 } as LoadOption) : plannedOptionOf(log);
+  const timedMain = ex.timed && !log.substitute;
+  return (
+    <table className="w-full border-separate border-spacing-y-2 text-sm">
+      <caption className="sr-only">Series de {exerciseName(log)}</caption>
+      <thead className="sr-only">
+        <tr>
+          <th scope="col">Estado</th>
+          <th scope="col">Serie</th>
+          <th scope="col">{timedMain ? 'Segundos' : 'Repeticiones'}</th>
+          <th scope="col">Carga</th>
+        </tr>
+      </thead>
+      <tbody>
+        {Array.from({ length: rows }, (_, i) => {
+          const st = log.sets[i];
+          const current = !st && i === log.sets.length;
+          const cell = `py-3 ${current ? 'border-y-2 border-primary bg-primary-soft/40' : 'border-y border-line bg-surface'}`;
+          return (
+            <tr key={i} aria-current={current ? 'step' : undefined}>
+              <td className={`${cell} rounded-l-xl pl-3 ${current ? 'border-l-2' : 'border-l'}`}>
+                <span className={`grid h-6 w-6 place-items-center rounded-md ${st ? (st.pain ? 'bg-danger text-white' : 'bg-success text-white') : 'border-2 border-line'}`}>
+                  {st ? <IconCheck size={14} /> : null}
+                </span>
+              </td>
+              <th scope="row" className={`${cell} text-left font-display font-semibold`}>
+                Serie {i + 1}
+              </th>
+              <td className={`${cell} tabular`}>
+                {st ? `${st.reps} ${timedMain ? 's' : 'rep'}` : current ? (timedMain ? ex.reps : `${ex.reps} rep`) : '–'}
+                {st && st.rir !== undefined && st.rir !== null ? <span className="ml-1 text-xs text-muted">RIR {rirLabel(st.rir)}</span> : null}
+              </td>
+              <td className={`${cell} tabular rounded-r-xl pr-3 text-right ${current ? 'border-r-2' : 'border-r'}`}>
+                {formatOptionShort(st ? setOption(st) : planned, st?.mode ?? mode, unit)}
+              </td>
+            </tr>
+          );
+        })}
+      </tbody>
+    </table>
   );
 }
 
@@ -675,7 +768,7 @@ function SetLogger({
               onInc={() => stepLoad(1)}
             />
             <p className="mt-1 text-center text-sm text-muted">{formatOption(option, mode, settings.unit)}</p>
-            {sameOption(option, planned) && !log.substitute ? <p className="text-center text-xs font-semibold text-sage-strong">= propuesta de hoy</p> : null}
+            {sameOption(option, planned) && !log.substitute ? <p className="text-center text-xs font-semibold text-primary-600">= propuesta de hoy</p> : null}
             {aboveProposal ? (
               <p className="mt-1 text-center text-xs text-warn">Por encima de la propuesta: úsala solo si mantienes la técnica y {RIR_TARGET.min}–{RIR_TARGET.max} RIR.</p>
             ) : null}
@@ -725,7 +818,7 @@ function SetLogger({
                 key={r}
                 selected={rir === r}
                 onClick={() => setRir(rir === r ? null : r)}
-                className={`px-0 ${r >= RIR_TARGET.min && r <= RIR_TARGET.max && rir !== r ? 'border-sage' : ''}`}
+                className={`px-0 ${r >= RIR_TARGET.min && r <= RIR_TARGET.max && rir !== r ? 'border-primary' : ''}`}
                 aria-label={`${rirLabel(r)} repeticiones en reserva${r >= RIR_TARGET.min && r <= RIR_TARGET.max ? ' (objetivo)' : ''}`}
               >
                 {rirLabel(r)}
@@ -792,7 +885,7 @@ function Warmup({ onDone, soundOn, voiceOn, now }: { onDone: () => void; soundOn
       </div>
       <ol className="flex flex-col gap-2">
         {WARMUP_STEPS.map((st, i) => (
-          <li key={st.name} className={`flex justify-between rounded-2xl px-4 py-3 ${timer.status !== 'idle' && i === currentStep ? 'bg-sage text-on-sage' : 'bg-surface-2'}`} aria-current={timer.status !== 'idle' && i === currentStep ? 'step' : undefined}>
+          <li key={st.name} className={`flex justify-between rounded-2xl px-4 py-3 ${timer.status !== 'idle' && i === currentStep ? 'bg-primary text-on-primary' : 'bg-surface-2'}`} aria-current={timer.status !== 'idle' && i === currentStep ? 'step' : undefined}>
             <span>{st.name}</span>
             <span className="tabular">{st.seconds} s</span>
           </li>
@@ -857,7 +950,7 @@ function Summary({ session: s, commit, settings, inventory }: { session: Workout
           [gluteSets, 'de glúteo'],
           [minutes, 'minutos'],
         ].map(([v, l]) => (
-          <div key={l} className="rounded-2xl bg-sage-soft p-3">
+          <div key={l} className="rounded-2xl bg-primary-soft p-3">
             <p className="tabular text-2xl font-bold">{v}</p>
             <p className="text-sm text-muted">{l}</p>
           </div>
@@ -914,7 +1007,7 @@ function Summary({ session: s, commit, settings, inventory }: { session: Workout
                   Usar {formatOptionShort(used!, ex.mode, settings.unit)} como próxima propuesta
                 </Button>
               ) : null}
-              {done && decided[ex.id] ? <p className="mt-2 text-sm font-semibold text-sage-strong">✓ Próxima propuesta: {formatOptionShort(decided[ex.id]!, ex.mode, settings.unit)}</p> : null}
+              {done && decided[ex.id] ? <p className="mt-2 text-sm font-semibold text-primary-600">✓ Próxima propuesta: {formatOptionShort(decided[ex.id]!, ex.mode, settings.unit)}</p> : null}
             </li>
           );
         })}

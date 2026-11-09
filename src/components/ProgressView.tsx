@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, type ReactNode } from 'react';
 import { RIR_TARGET, getExercise, planExercises } from '../data/plan';
 import { useCardio, useMeasurements, useProfile, useSessions, useSettings } from '../hooks/useData';
 import { db } from '../lib/db';
-import { formatShort, today } from '../lib/dates';
+import { addDays, formatShort, today } from '../lib/dates';
 import { programDayFor } from '../lib/program';
 import { rirLabel } from '../lib/progression';
 import { exerciseHistory, topOption, weekSummaries } from '../lib/stats';
@@ -10,41 +10,147 @@ import type { Measurement } from '../lib/types';
 import { displayValue, formatOptionShort } from '../lib/weights';
 import { CardioLogger } from './CardioLogger';
 import { BarChart, LineChart } from './Charts';
-import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, inputClass, useToast } from './ui';
+import { Button, Card, Chip, Field, Loading, Modal, Notice, PageHeader, Tabs, inputClass, useToast } from './ui';
+import { HistoryView } from './HistoryView';
+import { IconFlex, IconHip, IconScale, IconTape } from './icons';
 
-type Tab = 'fuerza' | 'gluteo' | 'cardio' | 'medidas';
+type Tab = 'resumen' | 'medidas' | 'fuerza' | 'cardio' | 'historial';
+type Range = '4' | '13' | 'all';
 
-export function ProgressView() {
-  const [tab, setTab] = useState<Tab>('fuerza');
+export function ProgressView({ initialTab = 'resumen' }: { initialTab?: Tab }) {
+  const [tab, setTab] = useState<Tab>(initialTab);
+  const [range, setRange] = useState<Range>('13');
   return (
     <div>
-      <PageHeader title="Progreso" subtitle="Fuerza, glúteos y constancia primero" action={<a href="#/historial" className="min-h-11 py-2 text-sm font-semibold text-sage-strong">Historial →</a>} />
-      <div className="mb-4 flex gap-2 overflow-x-auto pb-1" role="tablist" aria-label="Secciones de progreso">
-        {(
-          [
-            ['fuerza', 'Fuerza'],
-            ['gluteo', 'Glúteo y volumen'],
-            ['cardio', 'Cardio'],
+      <PageHeader
+        title="Tu progreso"
+        subtitle="Evolución de tus medidas, peso y fuerza"
+        action={
+          <label className="flex flex-col text-xs text-muted">
+            <span className="sr-only">Periodo</span>
+            <select value={range} onChange={(e) => setRange(e.target.value as Range)} className="min-h-10 rounded-xl border border-line bg-surface px-3 text-sm font-medium text-ink shadow-card">
+              <option value="4">4 semanas</option>
+              <option value="13">13 semanas</option>
+              <option value="all">Todo</option>
+            </select>
+          </label>
+        }
+      />
+      <div className="mb-5">
+        <Tabs
+          label="Secciones de progreso"
+          value={tab}
+          onChange={setTab}
+          tabs={[
+            ['resumen', 'Resumen'],
             ['medidas', 'Medidas'],
-          ] as const
-        ).map(([k, l]) => (
-          <button
-            key={k}
-            role="tab"
-            aria-selected={tab === k}
-            type="button"
-            onClick={() => setTab(k)}
-            className={`min-h-11 shrink-0 rounded-full px-4 text-sm font-semibold ${tab === k ? 'bg-ink text-bg' : 'bg-surface-2 text-ink'}`}
-          >
-            {l}
-          </button>
-        ))}
+            ['fuerza', 'Fuerza'],
+            ['cardio', 'Cardio'],
+            ['historial', 'Historial'],
+          ]}
+        />
       </div>
       <div role="tabpanel">
+        {tab === 'resumen' ? <Summary range={range} /> : null}
         {tab === 'medidas' ? <Measurements /> : null}
-        {tab === 'fuerza' ? <Loads /> : null}
-        {tab === 'gluteo' ? <Volume /> : null}
+        {tab === 'fuerza' ? (
+          <div className="flex flex-col gap-5">
+            <Loads />
+            <Volume />
+          </div>
+        ) : null}
         {tab === 'cardio' ? <Cardio /> : null}
+        {tab === 'historial' ? <HistoryView embedded /> : null}
+      </div>
+    </div>
+  );
+}
+
+/** Filtra registros por el periodo elegido. */
+function inRange<T extends { date: string }>(list: T[], range: Range): T[] {
+  if (range === 'all') return list;
+  const from = addDays(today(), -Number(range) * 7);
+  return list.filter((x) => x.date >= from);
+}
+
+function Summary({ range }: { range: Range }) {
+  const list = useMeasurements();
+  const profile = useProfile();
+  const sessions = useSessions();
+  const cardio = useCardio();
+  if (!list || !profile || !sessions || !cardio) return <Loading />;
+  const latest = (k: keyof Measurement) => [...list].reverse().find((m) => m[k] !== undefined)?.[k] as number | undefined;
+  const first = (k: keyof Measurement) => list.find((m) => m[k] !== undefined)?.[k] as number | undefined;
+  const fmtDelta = (d: number | undefined, unit: string) => (d === undefined ? '' : d === 0 ? 'Sin cambios' : `${d < 0 ? '▼' : '▲'} ${d > 0 ? '+' : ''}${Math.round(d * 10) / 10} ${unit}`);
+  const weight = latest('weightLb') ?? profile.weightLb;
+  const waist = latest('waistCm') ?? profile.waistCm;
+  const hip = latest('hipCm');
+  const weeks = weekSummaries(sessions, cardio);
+  const wk = programDayFor(today()).week;
+  const glute = wk ? weeks[wk - 1].gluteSets : 0;
+  const weightPts = withStart(profile.weightLb, inRange(list, range).filter((m) => m.weightLb !== undefined).map((m) => ({ label: formatShort(m.date), value: m.weightLb! })));
+  const rows: [string, keyof Measurement, number | undefined][] = [
+    ['Cintura', 'waistCm', profile.waistCm],
+    ['Cadera', 'hipCm', undefined],
+    ['Muslo', 'thighCm', undefined],
+    ['Brazo', 'armCm', undefined],
+  ];
+  const tiles: [ReactNode, string, string, string][] = [
+    [<IconScale />, 'Peso', `${weight} lb`, fmtDelta(weight - profile.weightLb, 'lb')],
+    [<IconTape />, 'Cintura', `${waist} cm`, fmtDelta(waist - profile.waistCm, 'cm')],
+    [<IconHip />, 'Cadera', hip !== undefined ? `${hip} cm` : '—', hip !== undefined ? fmtDelta(hip - (first('hipCm') ?? hip), 'cm') : 'Sin registros'],
+    [<IconFlex />, 'Series de glúteo', `${glute}`, 'esta semana'],
+  ];
+  return (
+    <div className="flex flex-col gap-5">
+      <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {tiles.map(([icon, label, value, sub]) => (
+          <Card key={label} className="flex flex-col gap-1">
+            <div className="flex items-center gap-2 text-primary">
+              {icon}
+              <span className="font-medium text-ink">{label}</span>
+            </div>
+            <p className="font-display text-2xl font-bold">{value}</p>
+            <p className="text-xs text-muted">{sub}</p>
+          </Card>
+        ))}
+      </div>
+      <div className="grid gap-5 lg:grid-cols-[1.4fr_1fr]">
+        <Card>
+          <h2 className="mb-2 font-display text-lg font-semibold">Evolución del peso</h2>
+          <LineChart title="Peso corporal" unit="lb" points={weightPts} refs={profile.showWeightGoal ? [{ value: profile.goalWeightLb, label: `Objetivo ${profile.goalWeightLb}` }] : []} empty={`Punto de partida: ${profile.weightLb} lb. Registra tus medidas en la pestaña Medidas.`} area />
+        </Card>
+        <Card>
+          <h2 className="mb-2 font-display text-lg font-semibold">Medidas (cm)</h2>
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-xs text-muted">
+                <th scope="col" className="py-1 text-left font-medium">
+                  <span className="sr-only">Medida</span>
+                </th>
+                <th scope="col" className="py-1 text-right font-medium">Inicial</th>
+                <th scope="col" className="py-1 text-right font-medium">Actual</th>
+                <th scope="col" className="py-1 text-right font-medium">Cambio</th>
+              </tr>
+            </thead>
+            <tbody>
+              {rows.map(([label, k, base]) => {
+                const ini = base ?? first(k);
+                const cur = latest(k) ?? base;
+                const d = ini !== undefined && cur !== undefined ? Math.round((cur - ini) * 10) / 10 : undefined;
+                return (
+                  <tr key={label} className="border-t border-line">
+                    <th scope="row" className="py-2 text-left font-medium">{label}</th>
+                    <td className="tabular py-2 text-right">{ini ?? '—'}</td>
+                    <td className="tabular py-2 text-right">{cur ?? '—'}</td>
+                    <td className="tabular py-2 text-right font-semibold text-primary">{d === undefined ? '—' : `${d > 0 ? '+' : ''}${d}`}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          <p className="mt-3 text-xs text-muted">Los cambios de medidas dependen de muchos factores; ningún ejercicio reduce grasa de una zona concreta.</p>
+        </Card>
       </div>
     </div>
   );

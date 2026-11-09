@@ -19,10 +19,11 @@ await page.getByRole('button', { name: 'Continuar' }).click();
 await page.getByRole('checkbox').check();
 await page.getByRole('button', { name: 'Continuar' }).click();
 await page.getByRole('button', { name: 'Empezar' }).click();
-await page.getByText('Semana 1 de 13').waitFor();
+await page.getByRole('heading', { name: /Hola/ }).waitFor();
+await page.getByText('Próximo entrenamiento').waitFor();
 await shot('01-dashboard');
 
-await page.getByRole('button', { name: 'Empezar entrenamiento' }).first().click();
+await page.getByRole('button', { name: 'Comenzar' }).first().click();
 await page.getByText('Calentamiento').first().waitFor();
 await shot('02-warmup');
 await page.getByRole('button', { name: /Listo, empezar/ }).click();
@@ -32,26 +33,30 @@ await page.getByText('15 lb total · 1 mancuerna con ambas manos').first().waitF
 await rir2();
 await shot('03-coach');
 await page.getByRole('button', { name: /Completar serie/ }).click();
-await page.getByText('Descanso', { exact: true }).waitFor();
+await page.getByRole('button', { name: 'Saltar descanso →' }).waitFor();
 await shot('04-rest');
-await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
+await page.getByRole('button', { name: 'Saltar descanso →' }).click();
 await rir2();
 await page.getByRole('button', { name: /Completar serie/ }).click();
 // Tras 2 series (semana 1) pasa al siguiente ejercicio
-await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
+await page.getByRole('button', { name: 'Saltar descanso →' }).click();
 await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
-await page.getByRole('button', { name: /Omitir/ }).click();
+await page.getByRole('button', { name: 'Más opciones' }).click();
+await page.getByRole('button', { name: /Omitir ejercicio/ }).click();
 await page.getByRole('heading', { name: 'Peso muerto rumano' }).waitFor();
 await page.getByText('10 lb por mano · 20 lb total').first().waitFor();
 // Sustituir
-await page.getByRole('button', { name: /Sustituir/ }).click();
+await page.getByRole('button', { name: 'Más opciones' }).click();
+await page.getByRole('button', { name: /Sustituir ejercicio/ }).click();
 await page.getByRole('button', { name: /Bisagra de cadera/ }).click();
 await page.getByRole('heading', { name: /Bisagra de cadera/ }).waitFor();
 // Omitir
-await page.getByRole('button', { name: /Omitir/ }).click();
+await page.getByRole('button', { name: 'Más opciones' }).click();
+await page.getByRole('button', { name: /Omitir ejercicio/ }).click();
 await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
 // Pausa y reanudar
-await page.getByRole('button', { name: /⏸ Pausa/ }).click();
+await page.getByRole('button', { name: 'Más opciones' }).click();
+await page.getByRole('button', { name: /Pausar sesión/ }).click();
 await page.getByRole('heading', { name: 'En pausa' }).waitFor();
 await page.getByRole('button', { name: /Reanudar/ }).click();
 await page.getByRole('heading', { name: 'En pausa' }).waitFor({ state: 'hidden' });
@@ -60,20 +65,21 @@ await page.waitForTimeout(300); // deja terminar la escritura en IndexedDB
 await page.reload();
 await page.getByRole('heading', { name: 'Zancada hacia atrás' }).waitFor();
 // Terminar
-await page.getByRole('button', { name: 'Terminar sesión ahora' }).click();
+await page.getByRole('button', { name: 'Terminar sesión', exact: true }).click();
 await page.getByRole('heading', { name: 'Resumen' }).waitFor();
 await shot('05-summary');
 await page.getByRole('button', { name: 'Guardar y terminar' }).click();
-await page.getByText('completado ✓').waitFor();
+await page.getByText(/Mañana · Martes/).waitFor();
 
 // --- Segunda sesión: dos sesiones "fáciles" → sugerencia de subida que requiere aprobación
+await page.goto(`${BASE}/#/entrenamiento`);
 await page.getByRole('button', { name: 'Repetir entrenamiento' }).click();
 await page.getByRole('button', { name: /Listo, empezar/ }).click();
 await page.getByRole('heading', { name: 'Hip thrust / puente de glúteo con mancuerna' }).waitFor();
 for (let i = 0; i < 2; i++) {
   await rir2();
   await page.getByRole('button', { name: /Completar serie/ }).click();
-  await page.getByRole('button', { name: 'Empezar siguiente serie' }).click();
+  await page.getByRole('button', { name: 'Saltar descanso →' }).click();
 }
 await page.getByRole('heading', { name: 'Sentadilla goblet' }).waitFor();
 // Dolor → indicación de parar
@@ -88,7 +94,9 @@ await shot('14-sugerencia');
 await page.getByRole('button', { name: /Aprobar 20 lb total/ }).click();
 await page.getByText('Próxima propuesta: 20 lb total').waitFor();
 await page.getByRole('button', { name: 'Guardar y terminar' }).click();
-await page.getByText('20 lb total · 1 mancuerna con ambas manos').first().waitFor(); // la propuesta aprobada se refleja en Inicio
+await page.goto(`${BASE}/#/entrenamiento`);
+await page.getByText('20 lb total · 1 mancuerna con ambas manos').first().waitFor(); // la propuesta aprobada se refleja en el plan
+await page.goto(`${BASE}/#/`);
 
 // Cardio desde Inicio
 await page.getByRole('button', { name: '+ Añadir' }).click();
@@ -106,7 +114,7 @@ await page.getByText('Medidas guardadas').waitFor();
 
 // Inventario: añadir 2 lb
 await page.goto(`${BASE}/#/ajustes`);
-await page.getByLabel('Nombre').fill('Botella 2 L');
+await page.getByLabel('Nombre', { exact: true }).fill('Botella 2 L');
 await page.getByLabel('Peso (lb)').fill('4.4');
 await page.getByRole('button', { name: 'Añadir alternativa ligera' }).click();
 await page.getByText('Botella 2 L añadida').waitFor();
@@ -119,7 +127,7 @@ if (backup.data.sessions.length !== 2 || backup.data.adjustments.length !== 1 ||
 }
 
 await page.goto(`${BASE}/#/plan`);
-await page.getByRole('tab', { name: 'Tabla de cargas' }).click();
+await page.getByRole('tab', { name: 'Progresión' }).click();
 await page.waitForTimeout(300);
 await shot('15-tabla');
 
@@ -128,6 +136,14 @@ for (const [hash, name] of [['/plan', '06-plan'], ['/progreso', '07-progreso'], 
   await page.waitForTimeout(400);
   await shot(name);
 }
+// Escritorio: menú lateral
+await page.setViewportSize({ width: 1440, height: 1000 });
+for (const [hash, name] of [['/', '20-desk-inicio'], ['/plan', '21-desk-programa'], ['/progreso', '22-desk-progreso'], ['/entrenamiento', '23-desk-entreno']]) {
+  await page.goto(`${BASE}/#${hash}`);
+  await page.waitForTimeout(500);
+  await shot(name);
+}
+await page.setViewportSize({ width: 390, height: 664 });
 // Modo oscuro
 await page.emulateMedia({ colorScheme: 'dark' });
 await page.goto(`${BASE}/#/`);

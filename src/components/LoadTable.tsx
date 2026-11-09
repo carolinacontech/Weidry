@@ -34,7 +34,7 @@ export function LoadTable() {
                 <tr className="text-xs text-muted">
                   <th scope="col" className="sticky left-0 bg-surface pr-2 text-left font-medium">Ejercicio</th>
                   {Array.from({ length: PROGRAM_WEEKS }, (_, i) => (
-                    <th key={i} scope="col" className={`w-9 px-0.5 text-center font-medium ${isRecoveryWeek(i + 1) ? 'bg-clay-soft' : ''}`}>
+                    <th key={i} scope="col" className={`w-9 px-0.5 text-center font-medium ${isRecoveryWeek(i + 1) ? 'bg-accent-soft' : ''}`}>
                       S{i + 1}
                     </th>
                   ))}
@@ -42,7 +42,7 @@ export function LoadTable() {
                 <tr className="text-[10px] text-muted">
                   <th scope="row" className="sticky left-0 bg-surface pr-2 text-left font-normal">Series</th>
                   {SETS_PER_WEEK.map((n, i) => (
-                    <td key={i} className={`text-center ${isRecoveryWeek(i + 1) ? 'bg-clay-soft' : ''}`}>{n}</td>
+                    <td key={i} className={`text-center ${isRecoveryWeek(i + 1) ? 'bg-accent-soft' : ''}`}>{n}</td>
                   ))}
                 </tr>
               </thead>
@@ -56,7 +56,7 @@ export function LoadTable() {
                         <span className="block text-[11px] text-muted">{ex.reps} · {MODE_SHORT[ex.mode]}{slot.fixedSets ? ` · ${slot.fixedSets} series` : ''}</span>
                       </th>
                       {slot.rx.map((r, i) => (
-                        <td key={i} className={`tabular px-0.5 text-center ${isRecoveryWeek(i + 1) ? 'bg-clay-soft' : ''} ${r.kind === 'db' ? 'font-semibold' : 'text-muted'}`}>
+                        <td key={i} className={`tabular px-0.5 text-center ${isRecoveryWeek(i + 1) ? 'bg-accent-soft' : ''} ${r.kind === 'db' ? 'font-semibold' : 'text-muted'}`}>
                           {cell(r)}
                         </td>
                       ))}

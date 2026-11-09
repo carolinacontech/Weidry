@@ -25,7 +25,7 @@ PWA en español para entrenar fuerza con un programa de 13 semanas centrado en *
 | **Datos** | Exportar e importar una copia completa en JSON. Exportar CSV de series, medidas y cardio; importar CSV de medidas y cardio. Borrar todo. |
 | **Guía** | Ilustraciones esquemáticas **originales** (SVG animado, dibujado en código), con preparación, ejecución, claves, errores comunes y alternativas. Puedes añadir tu propio video o enlace autorizado en cada ejercicio. La app no incluye enlaces de terceros. |
 | **PWA** | Instalable, con manifest, íconos (incluido apple‑touch‑icon) y service worker que precachea todo el build. Guarda inmediatamente cada serie y recupera la sesión tras cerrar o recargar. |
-| **Diseño** | Blanco cálido, verde salvia y un acento arcilla. Tipografías Fraunces e Inter (servidas en local). Modo oscuro automático o manual, botones grandes (≥ 44 px), foco visible y respeto por «reducir movimiento». |
+| **Diseño** | Sistema morado: primario #6D28D9, secundario #A78BFA, superficie #EDE9FE, fondo #F8F5FF, texto #1F2937 / #6B7280, éxito #10B981, alerta #EF4444. Poppins para títulos y botones, Inter para texto (ambas servidas en local). Tarjetas de radio 16 px con sombra suave. Menú lateral en escritorio y barra inferior en móvil. Modo oscuro automático o manual, botones grandes (≥ 44 px), foco visible y respeto por «reducir movimiento». Los tokens están en `src/styles/global.css`. |
 
 ## Instalación local
 

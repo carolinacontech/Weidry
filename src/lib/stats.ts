@@ -144,3 +144,25 @@ export function strengthProgress(sessions: WorkoutSession[], exerciseId: string)
   };
   return { first: summary(h[0]), last: summary(h[h.length - 1]), sessions: h.length };
 }
+
+const KEY_LIFTS_FOR_INDEX = ['glute-bridge', 'goblet-squat', 'romanian-deadlift', 'sumo-squat', 'single-arm-row', 'bent-over-row', 'floor-press'];
+
+/**
+ * Cambio de fuerza estimado (%) frente a las primeras sesiones: media, en los ejercicios
+ * principales con al menos dos sesiones, de la mejor serie (carga total × (1 + reps/30)).
+ * Es una estimación orientativa, no una medición de fuerza máxima.
+ */
+export function strengthChangePct(sessions: WorkoutSession[]): number | null {
+  const ratios: number[] = [];
+  for (const id of KEY_LIFTS_FOR_INDEX) {
+    const ex = EXERCISES[id];
+    const h = exerciseHistory(sessions, id);
+    if (h.length < 2) continue;
+    const score = (r: ExerciseSessionResult) =>
+      Math.max(...r.sets.map((s) => (ex.mode === 'body' || s.option.kind === 'body' ? s.reps : totalLb(s.option, ex.mode) * (1 + s.reps / 30))));
+    const first = score(h[0]);
+    if (first > 0) ratios.push(score(h[h.length - 1]) / first - 1);
+  }
+  if (!ratios.length) return null;
+  return Math.round((ratios.reduce((a, b) => a + b, 0) / ratios.length) * 100);
+}
